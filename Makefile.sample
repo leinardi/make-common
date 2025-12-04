@@ -1,32 +1,20 @@
+# Resolve repository root (Makefile can live anywhere)
+REPO_ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null || pwd)
+
 MK_COMMON_REPO        ?= leinardi/make-common
 MK_COMMON_VERSION     ?= v1.0.0
 
-MK_COMMON_DIR         := .mk
-MK_COMMON_VERSION_FILE := $(MK_COMMON_DIR)/.mk-common-version
-MK_COMMON_FILES       := help.mk pre-commit.mk passwords.mk
+MK_COMMON_DIR         := $(REPO_ROOT)/.mk
+MK_COMMON_FILES       := help.mk pre-commit.mk password.mk
 
-define MK_COMMON_FETCH
-  @mkdir -p $(MK_COMMON_DIR)
-  @echo "[mk] Fetching $(1) from $(MK_COMMON_REPO)@$(MK_COMMON_VERSION)"
-  @curl -fsSL \
-    "https://raw.githubusercontent.com/$(MK_COMMON_REPO)/$(MK_COMMON_VERSION)/.mk/$(1)" \
-    -o "$(MK_COMMON_DIR)/$(1)"
-endef
+MK_COMMON_BOOTSTRAP_SCRIPT := $(REPO_ROOT)/scripts/bootstrap-mk-common.sh
 
-# Read stored version (if any)
-MK_COMMON_STORED_VERSION := $(shell test -f $(MK_COMMON_VERSION_FILE) && cat $(MK_COMMON_VERSION_FILE) || echo "")
+# Bootstrap: the script will self-update and fetch the selected .mk snippets
+MK_COMMON_BOOTSTRAP := $(shell "$(MK_COMMON_BOOTSTRAP_SCRIPT)" \
+  "$(MK_COMMON_REPO)" \
+  "$(MK_COMMON_VERSION)" \
+  "$(MK_COMMON_DIR)" \
+  "$(MK_COMMON_FILES)")
 
-# Decide if we need to refetch (missing files OR version changed)
-MK_COMMON_MISSING := $(filter-out \
-  $(wildcard $(addprefix $(MK_COMMON_DIR)/,$(MK_COMMON_FILES))), \
-  $(addprefix $(MK_COMMON_DIR)/,$(MK_COMMON_FILES)))
-
-MK_COMMON_NEED_REFRESH := $(or $(MK_COMMON_MISSING), $(if $(filter $(MK_COMMON_VERSION),$(MK_COMMON_STORED_VERSION)),,yes))
-
-ifneq ($(MK_COMMON_NEED_REFRESH),)
-$(info [mk] Bootstrapping shared makefiles from $(MK_COMMON_REPO)@$(MK_COMMON_VERSION))
-$(foreach f,$(MK_COMMON_FILES),$(eval $(call MK_COMMON_FETCH,$(f))))
-$(shell echo $(MK_COMMON_VERSION) > $(MK_COMMON_VERSION_FILE))
-endif
-
+# Include shared make logic
 include $(addprefix $(MK_COMMON_DIR)/,$(MK_COMMON_FILES))
