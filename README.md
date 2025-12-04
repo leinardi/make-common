@@ -20,14 +20,14 @@ These snippets are versioned, self-bootstrapping, and safe to include in public 
    `scripts/bootstrap-mk-common.sh` (make this file executable).
 3. Adjust in your Makefile:
 
-   * `MK_COMMON_VERSION` → which tag of `make-common` to use
-   * `MK_COMMON_FILES` → which `.mk` snippets you want to include
+    * `MK_COMMON_VERSION` → which tag of `make-common` to use
+    * `MK_COMMON_FILES` → which `.mk` snippets you want to include
 4. Run any `make` command.
    On the first run:
 
-   * `scripts/bootstrap-mk-common.sh` will **update itself** to the pinned version
-     (`MK_COMMON_REPO@MK_COMMON_VERSION`)
-   * All required `.mk` files will be fetched into `.mk/`
+    * `scripts/bootstrap-mk-common.sh` will **update itself** to the pinned version
+      (`MK_COMMON_REPO@MK_COMMON_VERSION`)
+    * All required `.mk` files will be fetched into `.mk/`
 
 After that, both the script and the `.mk` files will automatically refresh whenever
 you bump `MK_COMMON_VERSION` in your Makefile.
@@ -40,7 +40,7 @@ Example minimal configuration
 REPO_ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null || pwd)
 
 MK_COMMON_REPO        ?= leinardi/make-common
-MK_COMMON_VERSION     ?= v1.0.0
+MK_COMMON_VERSION     ?= v1.1.0
 
 MK_COMMON_DIR         := $(REPO_ROOT)/.mk
 MK_COMMON_FILES       := help.mk pre-commit.mk password.mk
@@ -76,12 +76,14 @@ The bootstrap logic will detect the version change and refresh the local `.mk` f
 
 ## 📁 Available modules (.mk files)
 
-| File            | Description                                                |
-|-----------------|------------------------------------------------------------|
-| `help.mk`       | Default `help` target with auto-generated docs             |
-| `pre-commit.mk` | Wrapper around `pre-commit run`, stage checks, etc.        |
-| `password.mk`   | Secure PostgreSQL-compatible password generator            |
-| `opentofu.mk`   | Optional: helpers for `init`, `plan`, `apply`, and cleanup |
+| File               | Description                                                                 |
+|--------------------|-----------------------------------------------------------------------------|
+| `ansible-vault.mk` | Ansible Vault helpers for encrypt/decrypt per environment + plaintext clean |
+| `help.mk`          | Default `help` target with auto-generated documentation from `##` comments  |
+| `mkdocs.mk`        | MkDocs + Python tooling: venv, pip-tools, locked deps, build/serve/audit    |
+| `opentofu.mk`      | Helpers for OpenTofu `init`, `plan`, `apply`, and local cleanup             |
+| `password.mk`      | Secure PostgreSQL-compatible password generator                             |
+| `pre-commit.mk`    | Common `check` / `check-stage` targets around `pre-commit`                  |
 
 All modules include built-in guards to prevent accidental double inclusion.
 

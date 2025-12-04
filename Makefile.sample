@@ -2,7 +2,7 @@
 REPO_ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null || pwd)
 
 MK_COMMON_REPO        ?= leinardi/make-common
-MK_COMMON_VERSION     ?= v1.0.0
+MK_COMMON_VERSION     ?= v1.1.0
 
 MK_COMMON_DIR         := $(REPO_ROOT)/.mk
 MK_COMMON_FILES       := help.mk pre-commit.mk password.mk
