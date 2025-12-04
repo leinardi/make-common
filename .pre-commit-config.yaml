@@ -9,6 +9,10 @@ repos:
       - id: check-json
       - id: check-toml
       - id: check-added-large-files
+  - repo: https://github.com/checkmake/checkmake.git
+    rev: 0.2.2
+    hooks:
+      - id: checkmake
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.9
     hooks:
