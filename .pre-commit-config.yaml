@@ -58,7 +58,7 @@ repos:
         name: prettier-yaml
         entry: prettier
         language: node
-        additional_dependencies: ["prettier@3.5.3"]
+        additional_dependencies: ["prettier@3.7.4"]
         files: \.(yml|yaml)$
         args: ["--write"]
   - repo: https://github.com/adrienverge/yamllint
