@@ -48,5 +48,9 @@ tofu-clean-all: ## Delete local tfstate, backups and .terraform dirs under REPO_
 	\) -print -delete || true
 	@find "$(REPO_ROOT)" -type d -name '.terraform' -prune -print -exec rm -rf {} + || true
 
+.PHONY: tofu-command
+tofu-command: ## Run arbitrary tofu command: make tofu-command TOFU_ARGS="plan -destroy"
+	@[ -n "$(TOFU_ARGS)" ] || { echo 'Usage: make tofu-command TOFU_ARGS="plan -destroy"'; exit 1; }
+	$(TOFU) $(TF_COMMON_ARGS) $(TOFU_ARGS)
 
 endif  # MK_COMMON_OPENTOFU_INCLUDED
