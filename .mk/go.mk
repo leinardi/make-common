@@ -67,7 +67,7 @@ go-vet: ## Static checks (go vet)
 
 .PHONY: go-test
 go-test: ## Run tests with race detector
-	$(GO) test -race $(GO_PKG)
+	CGO_ENABLED=1 $(GO) test -race $(GO_PKG)
 
 .PHONY: go-test-cover
 go-test-cover: ## Run tests with coverage (coverage.out)
