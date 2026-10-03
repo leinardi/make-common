@@ -97,6 +97,7 @@ refreshes when they differ.
 | `opentofu.mk` | Helpers for OpenTofu `init`, `plan`, `apply`, and local cleanup |
 | `password.mk` | Secure PostgreSQL-compatible password generator |
 | `pre-commit.mk` | `check` / `check-stage` around `pre-commit`; `pre-commit-install` installs every hook type listed in `default_install_hook_types` (e.g. `commit-msg` for the Conventional Commits check) |
+| `zensical.mk` | Zensical counterpart of `mkdocs.mk` with the same `docs-*` targets (use one or the other): venv, pip-tools, a lock compiled with the tools so the two never conflict, strict build/serve/audit |
 
 All modules include built-in guards to prevent accidental double inclusion. `make test` checks that every module parses, lists
 its targets in `make help`, and survives being included twice, and tests the bootstrap script offline.
