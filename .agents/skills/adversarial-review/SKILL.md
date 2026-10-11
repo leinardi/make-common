@@ -91,6 +91,20 @@ Read `AGENTS.md` first: its invariants are the review checklist's floor.
 - **Empty:** unset optional variables, an empty `GO_BINARIES` / `DOCKER_TARGETS`, a repository with
   no git (`REPO_ROOT` falls back to `pwd`).
 - **Contract drift:** README table, `Makefile.sample` and `AGENTS.md` still describe the snippets.
+- **Commit type matches whether it ships:** `svu` derives the release from the commit types since
+  the last tag, and every commit lands as it is (merge commits). A change to what a fetched file
+  (`.mk/*.mk`, `scripts/bootstrap-mk-common.sh`) does, typed `chore`, `docs`, `refactor` or `perf`,
+  never reaches consumers on its own: a finding. So is a `feat`/`fix` on a change consumers do not
+  receive (CI, docs, tests), which cuts a release with nothing in it, a stray `!` or
+  `BREAKING CHANGE:` footer that cuts a major inside `v1`, and a subject with a word ending in
+  `feat` or `fix` right before a colon (`prefix:`), which `svu` counts as `fix`. Comment-only
+  changes to fetched files may be `docs` or `chore` (`AGENTS.md`, commit messages).
+- **A meta-test that can no longer fail:** `scripts/test-mk.sh`, `scripts/test-bootstrap.sh`,
+  `scripts/test-license-headers.sh` and `scripts/check-license-headers.sh` guard claims the
+  snippets cannot check for themselves. Break the guarded thing once (drop an include guard, change
+  a `RECIPES` recipe, make the bootstrap write straight into `.mk/`, strip a header) and see whether
+  the test still fails. A check that passes because its file list is empty, its `case` pattern no
+  longer matches anything, or its loop never ran is a false pass: a finding.
 
 For each candidate finding, reproduce it or trace the failing input end to end. If that confirms it,
 report it; if not, dig once more, then drop it. No named input and wrong result, no finding.
@@ -101,6 +115,7 @@ report it; if not, dig once more, then drop it. No named input and wrong result,
 | --- | --- |
 | any `.mk/*.mk` | `make test`, `make check`, then run the changed targets (`make -n <target>`, then for real) in a consumer |
 | `scripts/bootstrap-mk-common.sh` | `make check`, then in a consumer: `make mk-common-update` with `MK_COMMON_VERSION` pointing at the branch |
+| `scripts/test-*.sh`, `scripts/check-license-headers.sh` | `make test`, `make check`, and the mutation from the meta-test pass above |
 | anything else | `make check` |
 
 Say which recipes you could not run rather than implying they passed.
