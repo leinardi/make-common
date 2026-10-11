@@ -2,8 +2,8 @@
 
 ## Setup
 
-Install [`pre-commit`](https://pre-commit.com/) and [`shellcheck`](https://www.shellcheck.net/), then install the hooks once
-with `make pre-commit-install`. It installs both the `pre-commit` and the `commit-msg` hooks, so commit messages are checked when
+Install [`pre-commit`](https://pre-commit.com/) (it fetches the pinned `shellcheck` and every other hook itself), then install
+the hooks once with `make pre-commit-install`. It installs both the `pre-commit` and the `commit-msg` hooks, so commit messages are checked when
 you commit.
 
 - `make check` runs the full pre-commit suite on every file, `make check-stage` on the staged files only.
