@@ -18,6 +18,8 @@ Any HTML comment will be stripped when the markdown is rendered, so you don't ne
 - [ ] Every commit message follows
   [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) with a scope
   (`type(scope): subject`)
+- [ ] Each commit type matches whether consumers should receive the change (`fix`/`feat` for a
+  change to what a fetched file does; see `CONTRIBUTING.md`)
 - [ ] I have performed a self-review of my own code
 - [ ] There are no `WIP` commits in this PR
 
