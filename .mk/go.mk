@@ -86,6 +86,22 @@ go-fmt-check: ## Fail if formatting is needed
 go-vet: ## Static checks (go vet)
 	$(GO) vet $(GO_PKG)
 
+# Lint through the same pinned golangci-lint the pre-commit hook runs, over the whole module, so
+# `make go-lint`, the commit hook and CI cannot disagree on the linter version or its
+# configuration. GO_LINT_HOOK is the hook id in the consumer's .pre-commit-config.yaml (the
+# golangci/golangci-lint repository's whole-module hook). Self-contained rather than depending on
+# pre-commit.mk's check-installed-pre-commit, so go.mk still works on its own.
+GO_LINT_HOOK ?= golangci-lint-full
+
+.PHONY: go-lint
+go-lint: ## Lint all Go code with golangci-lint (pre-commit pin)
+	@if ! command -v pre-commit >/dev/null 2>&1; then \
+	  echo "Error: pre-commit is not installed (go-lint runs golangci-lint through it)."; \
+	  echo "Install it with: pipx install pre-commit (or brew/apt install pre-commit)"; \
+	  exit 1; \
+	fi
+	@pre-commit run "$(GO_LINT_HOOK)" --all-files
+
 .PHONY: go-test
 go-test: ## Run tests with race detector
 	CGO_ENABLED=1 $(GO) test -race $(GO_PKG)

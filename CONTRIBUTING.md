@@ -7,7 +7,8 @@ with `make pre-commit-install`. It installs both the `pre-commit` and the `commi
 you commit.
 
 - `make check` runs the full pre-commit suite on every file, `make check-stage` on the staged files only.
-- `make test` smoke-tests every snippet: it parses, lists its targets in `make help`, and keeps its include guard.
+- `make test` smoke-tests every snippet: it parses, lists its targets in `make help`, and keeps its include guard; it also
+  dry-runs the recipes pinned in `scripts/test-mk.sh` (`RECIPES`) and tests the bootstrap script offline.
 
 Consumers fetch these files blind: read [AGENTS.md](AGENTS.md) for the invariants a change must keep. A new snippet also needs a
 row in the README's module table.

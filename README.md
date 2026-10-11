@@ -91,7 +91,7 @@ refreshes when they differ.
 | --- | --- |
 | `ansible-vault.mk` | Ansible Vault helpers for encrypt/decrypt per environment + plaintext clean |
 | `docker.mk` | `docker-build` / `docker-tag-latest`, per image for every entry in `DOCKER_TARGETS` |
-| `go.mk` | Go build (per binary in `GO_BINARIES`), run, clean, tidy, fmt, fmt-check, vet, test (race) and coverage |
+| `go.mk` | Go build (per binary in `GO_BINARIES`), run, clean, tidy, fmt, fmt-check, vet, test (race) and coverage; `go-lint` runs golangci-lint through the consumer's own pre-commit hook (`GO_LINT_HOOK`, default `golangci-lint-full`), so the make target, the commit hook and CI use the same pinned version |
 | `help.mk` | Default `help` target with auto-generated documentation from `##` comments |
 | `mkdocs.mk` | MkDocs + Python tooling: venv, pip-tools, locked deps, build/serve/audit |
 | `opentofu.mk` | Helpers for OpenTofu `init`, `plan`, `apply`, and local cleanup |
@@ -100,7 +100,7 @@ refreshes when they differ.
 | `zensical.mk` | Zensical counterpart of `mkdocs.mk` with the same `docs-*` targets (use one or the other): venv, pip-tools, a lock compiled with the tools so the two never conflict, strict build/serve/audit |
 
 All modules include built-in guards to prevent accidental double inclusion. `make test` checks that every module parses, lists
-its targets in `make help`, and survives being included twice, and tests the bootstrap script offline.
+its targets in `make help`, and survives being included twice, dry-runs the recipes pinned in `scripts/test-mk.sh`, and tests the bootstrap script offline.
 
 The bootstrap fetches the exact commit the tag resolves to and installs nothing unless every download succeeded, so a failed
 refresh leaves `.mk/` as it was.

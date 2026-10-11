@@ -38,7 +38,8 @@ This repository includes its snippets straight from `.mk/` (see `Makefile`); it 
 - **The bootstrap script is fetched by itself too.** A change to it must keep working when it is run by an older copy of itself.
   It downloads everything into a staging directory, from the exact commit it records, and installs only once every download
   succeeded, with the version file last: a failed refresh changes nothing. `scripts/test-bootstrap.sh` holds it to that.
-- **Recipes are shell run by `make`:** `make test` parses them but does not run them, so a recipe change needs running by hand
+- **Recipes are shell run by `make`:** `make test` parses them and dry-runs the few pinned in `scripts/test-mk.sh`'s
+  `RECIPES` table, but runs none of them, so a recipe change needs running by hand
   in a consumer (e.g. with `make -n <target>` and then for real).
 
 ## Commit messages
