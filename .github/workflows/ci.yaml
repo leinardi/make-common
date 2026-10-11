@@ -1,7 +1,12 @@
 name: CI
 
+# The authoritative checks (pre-commit-all, mk-smoke) run on every pull request and every push to
+# main; the reviewdog jobs only annotate pull requests. ci-result is the one required check.
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -13,6 +18,42 @@ permissions:
   contents: read
 
 jobs:
+  # The authoritative lint gate: every pre-commit hook over every file, with the versions pinned in
+  # .pre-commit-config.yaml. The reviewdog jobs below only annotate a pull request's diff.
+  pre-commit-all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+
+      - name: Install pre-commit
+        run: pip install --no-cache-dir pre-commit==4.6.2
+
+      # Restore only: pre-commit-warmup.yaml saves the entry on main under the same key.
+      - name: Restore the pre-commit cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit|${{ runner.os }}|${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run every pre-commit hook on every file
+        run: pre-commit run --all-files --show-diff-on-failure
+
+      # pre-commit fails a hook that modifies a tracked file, which covers the auto-fixing hooks
+      # (markdownlint fix, prettier); this also fails on a file a hook creates, which its diff
+      # check does not see, so no fix can pass silently.
+      - name: Fail if a hook modified a file
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+
   actionlint:
     # The reviewdog reporters comment on a pull request; there is none to comment on otherwise.
     if: github.event_name == 'pull_request'
@@ -157,3 +198,41 @@ jobs:
 
       - name: Smoke-test the snippets
         run: make test
+
+  # The one required check that stands for the rest: GitHub counts a skipped required job as passing,
+  # so this job runs always and decides. On a pull request every needed job must succeed; on a push
+  # or a dispatch conventional-commits is skipped and the others must succeed.
+  ci-result:
+    if: always()
+    needs:
+      - pre-commit-all
+      - conventional-commits
+      - mk-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check the needed jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          failed="$(jq -r --arg event "${EVENT}" '
+            to_entries[]
+            | select(.value.result != "success")
+            | select(
+                (
+                  $event != "pull_request"
+                  and .key == "conventional-commits"
+                  and .value.result == "skipped"
+                ) | not
+              )
+            | "\(.key): \(.value.result)"
+          ' <<<"${NEEDS}")"
+          if [[ -n "${failed}" ]]; then
+            echo "::error::Needed jobs did not succeed:"
+            echo "${failed}"
+            exit 1
+          fi
+          echo "Every needed job succeeded."

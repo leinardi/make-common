@@ -11,10 +11,10 @@ description: >
 
 # Adversarial Review — make-common
 
-You are a hostile reviewer. Assume the change is **wrong until proven right**. Consumers fetch
-these files blind on `make mk-common-update`, and a recipe is shell that runs on their
-machines. Find the consumer setup, variable value or path where it breaks. A review that finds
-nothing is only credible after you tried to break it and failed.
+You are a hostile reviewer. Assume the change is **wrong until proven right**. Consumers fetch these
+files blind on `make mk-common-update`, and a recipe is shell that runs on their machines. Find the
+consumer setup, variable value or path where it breaks. A review that finds nothing is only credible
+after you tried to break it and failed.
 
 Copy this checklist and tick items as you go:
 
@@ -30,8 +30,8 @@ Review progress:
 
 ## 1. Establish the diff
 
-With no scope given, review the uncommitted work; if the tree is clean, review the branch
-against `main`.
+With no scope given, review the uncommitted work; if the tree is clean, review the branch against
+`main`.
 
 | User intent | Command |
 | --- | --- |
@@ -54,8 +54,8 @@ Read `AGENTS.md` first: its invariants are the review checklist's floor.
 
 - A target, variable or default removed or renamed, or a default changed so that an existing
   consumer runs something different, is a breaking change: **critical** inside `v1`.
-- A new variable is `?=`, so a consumer's value wins; `:=` or `=` on a consumer-facing variable
-  is a finding.
+- A new variable is `?=`, so a consumer's value wins; `:=` or `=` on a consumer-facing variable is a
+  finding.
 
 ### Snippet hygiene
 
@@ -67,8 +67,8 @@ Read `AGENTS.md` first: its invariants are the review checklist's floor.
 ### Recipes
 
 - Quoting: paths with spaces, empty variables, `$$` escaping for shell variables, a `\` line
-  continuation that ends every line of a multi-line command (a stray character after it breaks
-  the recipe only when it runs, which `make test` does not do).
+  continuation that ends every line of a multi-line command (a stray character after it breaks the
+  recipe only when it runs, which `make test` does not do).
 - Portability: GNU make features consumers may not have, and GNU-only flags of `sed`, `find`,
   `date`, `stat` on macOS consumers.
 - Failure: a recipe that exits 0 after a failed step (`;` instead of `&&`, a pipeline without
@@ -76,24 +76,38 @@ Read `AGENTS.md` first: its invariants are the review checklist's floor.
 
 ### Bootstrap script
 
-- It is run by an older copy of itself first, then re-execs the new one: arguments, the version
-  file format and the environment it reads must stay compatible both ways.
+- It is run by an older copy of itself first, then re-execs the new one: arguments, the version file
+  format and the environment it reads must stay compatible both ways.
 - It must not download from anything but the commit `MK_COMMON_VERSION` resolves to, nor write
   outside `scripts/` and `.mk/`.
-- A refresh is all or nothing: every file is staged first, then installed, version file last.
-  A download or write straight into `.mk/` reopens the half-updated window
+- A refresh is all or nothing: every file is staged first, then installed, version file last. A
+  download or write straight into `.mk/` reopens the half-updated window
   (`scripts/test-bootstrap.sh` must still pass, and must fail against the old behaviour).
 
 ## 4. Adversarial passes
 
 - **Correctness:** a wrong automatic variable, a `$(shell ...)` evaluated at parse time that should
   run at recipe time.
-- **Empty:** unset optional variables, an empty `GO_BINARIES` / `DOCKER_TARGETS`, a repository
-  with no git (`REPO_ROOT` falls back to `pwd`).
+- **Empty:** unset optional variables, an empty `GO_BINARIES` / `DOCKER_TARGETS`, a repository with
+  no git (`REPO_ROOT` falls back to `pwd`).
 - **Contract drift:** README table, `Makefile.sample` and `AGENTS.md` still describe the snippets.
+- **Commit type matches whether it ships:** `svu` derives the release from the commit types since
+  the last tag, and every commit lands as it is (merge commits). A change to what a fetched file
+  (`.mk/*.mk`, `scripts/bootstrap-mk-common.sh`) does, typed `chore`, `docs`, `refactor` or `perf`,
+  never reaches consumers on its own: a finding. So is a `feat`/`fix` on a change consumers do not
+  receive (CI, docs, tests), which cuts a release with nothing in it, a stray `!` or
+  `BREAKING CHANGE:` footer that cuts a major inside `v1`, and a subject with a word ending in
+  `feat` or `fix` right before a colon (`prefix:`), which `svu` counts as `fix`. Comment-only
+  changes to fetched files may be `docs` or `chore` (`AGENTS.md`, commit messages).
+- **A meta-test that can no longer fail:** `scripts/test-mk.sh`, `scripts/test-bootstrap.sh`,
+  `scripts/test-license-headers.sh` and `scripts/check-license-headers.sh` guard claims the
+  snippets cannot check for themselves. Break the guarded thing once (drop an include guard, change
+  a `RECIPES` recipe, make the bootstrap write straight into `.mk/`, strip a header) and see whether
+  the test still fails. A check that passes because its file list is empty, its `case` pattern no
+  longer matches anything, or its loop never ran is a false pass: a finding.
 
-For each candidate finding, reproduce it or trace the failing input end to end. If that confirms
-it, report it; if not, dig once more, then drop it. No named input and wrong result, no finding.
+For each candidate finding, reproduce it or trace the failing input end to end. If that confirms it,
+report it; if not, dig once more, then drop it. No named input and wrong result, no finding.
 
 ## 5. Verify
 
@@ -101,6 +115,7 @@ it, report it; if not, dig once more, then drop it. No named input and wrong res
 | --- | --- |
 | any `.mk/*.mk` | `make test`, `make check`, then run the changed targets (`make -n <target>`, then for real) in a consumer |
 | `scripts/bootstrap-mk-common.sh` | `make check`, then in a consumer: `make mk-common-update` with `MK_COMMON_VERSION` pointing at the branch |
+| `scripts/test-*.sh`, `scripts/check-license-headers.sh` | `make test`, `make check`, and the mutation from the meta-test pass above |
 | anything else | `make check` |
 
 Say which recipes you could not run rather than implying they passed.
