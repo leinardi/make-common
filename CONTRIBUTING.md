@@ -10,7 +10,7 @@ hook itself), then install the hooks once with `make pre-commit-install`. It ins
   only.
 - `make test` smoke-tests every snippet: it parses, lists its targets in `make help`, and keeps its
   include guard; it also dry-runs the recipes pinned in `scripts/test-mk.sh` (`RECIPES`) and tests
-  the bootstrap script offline.
+  the bootstrap script and the licence header check offline.
 
 Consumers fetch these files blind: read [AGENTS.md](AGENTS.md) for the invariants a change must
 keep. A new snippet also needs a row in the README's module table.
@@ -38,8 +38,13 @@ The release version is derived from these types, since the last release:
 | none | everything else: `build`, `chore`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `revert` | `docs(readme): fix a link` |
 
 Pick the type by whether consumers should receive the change, not by what kind of change it is:
-anything that changes a fetched file (`.mk/*.mk`, `scripts/bootstrap-mk-common.sh`) is a `fix` or a
-`feat`. A breaking change is a new `v2`, never a change inside `v1`.
+anything that changes what a fetched file (`.mk/*.mk`, `scripts/bootstrap-mk-common.sh`) does is a
+`fix` or a `feat`. A change to comments only (a licence header, a typo) may be `docs` or `chore`
+and reaches consumers with the next release. A breaking change is a new `v2`, never a change inside
+`v1`.
+
+Every shell script, snippet and the `Makefile` carries the MIT header; `make check` fails on a file
+without it ([AGENTS.md](AGENTS.md#licence-headers)).
 
 Pull requests are merged with merge commits; squash and rebase merging are disabled. Every commit
 therefore lands on `main` as it is, so each one needs a correct type, not just the pull request as a

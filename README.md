@@ -103,6 +103,9 @@ All modules include built-in guards to prevent accidental double inclusion. `mak
 every module parses, lists its targets in `make help`, and survives being included twice, dry-runs
 the recipes pinned in `scripts/test-mk.sh`, and tests the bootstrap script offline.
 
+Every snippet and the bootstrap script carry the MIT header, so a consumer's copy says where it came
+from; `Makefile.sample` does not, because it becomes the consumer's own `Makefile`.
+
 The bootstrap fetches the exact commit the tag resolves to and installs nothing unless every
 download succeeded, so a failed refresh leaves `.mk/` as it was.
 
