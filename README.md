@@ -95,8 +95,10 @@ recorded in `.mk/.mk-common-version` and refreshes when they differ.
 | `help.mk` | Default `help` target with auto-generated documentation from `##` comments |
 | `mkdocs.mk` | MkDocs + Python tooling: venv, pip-tools, locked deps, build/serve/audit |
 | `opentofu.mk` | Helpers for OpenTofu `init`, `plan`, `apply`, and local cleanup |
+| `parity.mk` | Demo parity harness around Playwright: compare a design-system prototype with the app's demo build, keep the known differences in a ratcheted `.parity-baseline` (`demo-parity`, `-full`, `-update`, `-accept REASON=`, `-report`, `-triage`, `-servers`); needs `web.mk` listed before it |
 | `password.mk` | Secure PostgreSQL-compatible password generator |
 | `pre-commit.mk` | `check` / `check-stage` around `pre-commit`; `pre-commit-install` installs every hook type listed in `default_install_hook_types` (e.g. `commit-msg` for the Conventional Commits check) |
+| `web.mk` | npm web app in `WEB_DIR` (default `web/`): `web-install` (`npm ci`), `web-dev`, `web-demo`, `web-build`, `web-build-demo`, `web-test`, `web-lint`, `web-update`, `api-types`, and `build` (the app, then `WEB_BUILD_NEXT`, default `go-build`, which embeds it); every target installs only when `package.json`, `package-lock.json` or `.npmrc` changed |
 | `zensical.mk` | Zensical counterpart of `mkdocs.mk` with the same `docs-*` targets (use one or the other): venv, pip-tools, a lock compiled with the tools so the two never conflict, strict build/serve/audit |
 
 All modules include built-in guards to prevent accidental double inclusion. `make test` checks that

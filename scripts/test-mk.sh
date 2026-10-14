@@ -57,21 +57,36 @@ MAKEFILE
 	echo "ok   - $name"
 done
 
-# Recipe expectations, one per line: <snippet>|<make arguments>|<expected line>.
-# Each snippet is included with help.mk only, as above, so a recipe that leans on
-# a target from another snippet fails here. `make -n` prints the recipe without
-# running it; the expected line must appear in it verbatim.
+# Recipe expectations, one per line: <snippets>|<make arguments>|<expected line>.
+# The snippets (space-separated, in include order) are included with help.mk
+# only, so a recipe that leans on a target from a snippet not listed fails here.
+# `make -n` prints the recipe without running it; the expected line must appear
+# in it verbatim. The work directory holds a web/ app with only its manifest and
+# lockfile, so web.mk's install stamp is always out of date there.
 RECIPES=$(
 	cat <<'EOF'
 go.mk|go-lint|pre-commit run "golangci-lint-full" --all-files
 go.mk|go-lint GO_LINT_HOOK=golangci-lint-repo-mod|pre-commit run "golangci-lint-repo-mod" --all-files
+web.mk|web-build WEB_DIR=web|npm --prefix "web" ci
+web.mk|web-build WEB_DIR=web|npm --prefix "web" run build
+web.mk|web-lint WEB_DIR=web|npm --prefix "web" run typecheck
+web.mk|build WEB_DIR=web WEB_BUILD_NEXT=help|make help
+web.mk parity.mk|demo-parity WEB_DIR=web SCENARIO=a/b|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="a/b" npm run parity
+web.mk parity.mk|demo-parity-accept WEB_DIR=web|echo "demo-parity-accept: REASON= is required: say why these differences are accepted" >&2; exit 2
+web.mk parity.mk|demo-parity-accept WEB_DIR=web REASON=$x|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="" PARITY_BASELINE=accept npm run parity
 EOF
 )
+mkdir -p "$WORK/web"
+touch "$WORK/web/package.json" "$WORK/web/package-lock.json"
+
 while IFS='|' read -r name args expected; do
+	# Word splitting of $name is intended: it lists the snippets to include.
+	# shellcheck disable=SC2086
+	includes=$(for n in $name; do printf 'include %s/.mk/%s\n' "$ROOT" "$n"; done)
 	cat >"$WORK/Makefile" <<MAKEFILE
 REPO_ROOT := $WORK
 include $ROOT/.mk/help.mk
-include $ROOT/.mk/$name
+$includes
 MAKEFILE
 	# Word splitting of $args is intended: it holds a target and variable assignments.
 	# shellcheck disable=SC2086
@@ -89,4 +104,21 @@ MAKEFILE
 	fi
 	echo "ok   - $name: make $args"
 done <<<"$RECIPES"
+
+# parity.mk without web.mk: a parity goal stops and names web.mk, rather than
+# running npm with no WEB_DIR.
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/parity.mk
+MAKEFILE
+if out=$(make --no-print-directory -n -C "$WORK" demo-parity 2>&1) ||
+	! grep -q 'parity.mk needs web.mk' <<<"$out"; then
+	echo "FAIL - parity.mk: a parity goal without web.mk does not stop"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - parity.mk: a parity goal without web.mk stops"
+fi
+
 exit "$fail"
