@@ -25,6 +25,10 @@
 ifndef MK_COMMON_ANSIBLE_VAULT_INCLUDED
 MK_COMMON_ANSIBLE_VAULT_INCLUDED := 1
 
+# Command that runs ansible-vault. A consumer can point it at a pinned ansible-core instead of the
+# one on the PATH, e.g. ANSIBLE_VAULT := uvx --from ansible-core==2.21.4 ansible-vault
+ANSIBLE_VAULT ?= ansible-vault
+
 # Vault password file to use with --vault-password-file
 ANSIBLE_VAULT_PASS_FILE ?= vault_password.txt
 
@@ -44,11 +48,11 @@ ANSIBLE_VAULT_ENCRYPTED_FILES := \
   $(foreach env,$(ANSIBLE_VAULT_ENVIRONMENTS), \
     $(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$(env).vault.yaml)
 
-# Internal: ensure ansible-vault is installed
+# Internal: ensure the program ANSIBLE_VAULT starts with is installed
 .PHONY: ansible-vault-check
 ansible-vault-check:
-	@if ! command -v ansible-vault >/dev/null 2>&1; then \
-	  echo "Error: ansible-vault not found in PATH."; \
+	@if ! command -v $(firstword $(ANSIBLE_VAULT)) >/dev/null 2>&1; then \
+	  echo "Error: $(firstword $(ANSIBLE_VAULT)) not found in PATH."; \
 	  echo "Install Ansible, e.g.:"; \
 	  echo "  pipx install ansible-core   # or"; \
 	  echo "  pip install --user ansible-core"; \
@@ -66,7 +70,7 @@ vault-encrypt: ansible-vault-check ## Encrypt secrets for ENV (e.g. ENV=dev)
 	  echo "       where <env> is one of: $(ANSIBLE_VAULT_ENVIRONMENTS)"; \
 	  exit 1; \
 	fi
-	ansible-vault encrypt \
+	$(ANSIBLE_VAULT) encrypt \
 	  --output $(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$$ENV.vault.yaml \
 	  --vault-password-file $(ANSIBLE_VAULT_PASS_FILE) \
 	  $(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$$ENV.yaml
@@ -80,7 +84,7 @@ vault-decrypt: ansible-vault-check ## Decrypt secrets for ENV (e.g. ENV=dev)
 	  echo "       where <env> is one of: $(ANSIBLE_VAULT_ENVIRONMENTS)"; \
 	  exit 1; \
 	fi
-	ansible-vault decrypt \
+	$(ANSIBLE_VAULT) decrypt \
 	  $(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$$ENV.vault.yaml \
 	  --vault-password-file $(ANSIBLE_VAULT_PASS_FILE) \
 	  --output $(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$$ENV.yaml
@@ -91,7 +95,7 @@ vault-decrypt: ansible-vault-check ## Decrypt secrets for ENV (e.g. ENV=dev)
 vault-encrypt-all: ansible-vault-check ## Encrypt secrets for all environments
 	@for env in $(ANSIBLE_VAULT_ENVIRONMENTS); do \
 	  echo "Encrypting $$env ..."; \
-	  ansible-vault encrypt \
+	  $(ANSIBLE_VAULT) encrypt \
 	    --output "$(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$$env.vault.yaml" \
 	    --vault-password-file "$(ANSIBLE_VAULT_PASS_FILE)" \
 	    "$(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$$env.yaml"; \
@@ -101,7 +105,7 @@ vault-encrypt-all: ansible-vault-check ## Encrypt secrets for all environments
 vault-decrypt-all: ansible-vault-check ## Decrypt secrets for all environments
 	@for env in $(ANSIBLE_VAULT_ENVIRONMENTS); do \
 	  echo "Decrypting $$env ..."; \
-	  ansible-vault decrypt \
+	  $(ANSIBLE_VAULT) decrypt \
 	    "$(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$$env.vault.yaml" \
 	    --vault-password-file "$(ANSIBLE_VAULT_PASS_FILE)" \
 	    --output "$(ANSIBLE_VAULT_VARS_DIR)/$(ANSIBLE_VAULT_FILE_PREFIX).$$env.yaml"; \

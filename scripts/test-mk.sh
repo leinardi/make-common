@@ -65,6 +65,8 @@ done
 # lockfile, so web.mk's install stamp is always out of date there.
 RECIPES=$(
 	cat <<'EOF'
+ansible-vault.mk|vault-decrypt ENV=dev|ansible-vault decrypt \
+ansible-vault.mk|vault-decrypt ENV=dev ANSIBLE_VAULT=/opt/ansible/bin/ansible-vault|/opt/ansible/bin/ansible-vault decrypt \
 go.mk|go-lint|pre-commit run "golangci-lint-full" --all-files
 go.mk|go-lint GO_LINT_HOOK=golangci-lint-repo-mod|pre-commit run "golangci-lint-repo-mod" --all-files
 web.mk|web-build WEB_DIR=web|npm --prefix "web" ci
