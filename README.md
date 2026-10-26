@@ -89,7 +89,7 @@ recorded in `.mk/.mk-common-version` and refreshes when they differ.
 
 | File | Description |
 | --- | --- |
-| `ansible-vault.mk` | Ansible Vault helpers for encrypt/decrypt per environment + plaintext clean |
+| `ansible-vault.mk` | Ansible Vault helpers for encrypt/decrypt per environment + plaintext clean; `ANSIBLE_VAULT` (default `ansible-vault`) sets the command, e.g. a pinned `uvx --from ansible-core==<version> ansible-vault` |
 | `docker.mk` | `docker-build` / `docker-tag-latest`, per image for every entry in `DOCKER_TARGETS` |
 | `go.mk` | Go build (per binary in `GO_BINARIES`), run, clean, tidy, fmt, fmt-check, vet, test (race) and coverage; `go-lint` runs golangci-lint through the consumer's own pre-commit hook (`GO_LINT_HOOK`, default `golangci-lint-full`), so the make target, the commit hook and CI use the same pinned version |
 | `help.mk` | Default `help` target with auto-generated documentation from `##` comments |
