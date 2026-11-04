@@ -68,7 +68,7 @@ rust-build: ## Build the Rust workspace, every target, with the version stamps
 	$(RUST_VERSION_ENV) $(CARGO) build --workspace --all-targets $(RUST_FEATURES) --locked
 
 .PHONY: rust-dist
-rust-dist: ## Build the release binary BIN_NAME, with the version stamps, into $(DIST_DIR)/
+rust-dist: ## Build the release binary BIN_NAME, with the version stamps, into DIST_DIR
 	$(RUST_VERSION_ENV) $(CARGO) build --release --locked --bin "$(BIN_NAME)"
 	@mkdir -p "$(DIST_DIR)"
 	cp "$(RUST_TARGET_DIR)/release/$(BIN_NAME)" "$(DIST_DIR)/$(BIN_NAME)"
