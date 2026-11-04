@@ -73,6 +73,8 @@ web.mk|web-build WEB_DIR=web|npm --prefix "web" ci
 web.mk|web-build WEB_DIR=web|npm --prefix "web" run build
 web.mk|web-lint WEB_DIR=web|npm --prefix "web" run typecheck
 web.mk|build WEB_DIR=web WEB_BUILD_NEXT=help|make help
+web.mk go.mk|build WEB_DIR=web|make go-build
+web.mk|build WEB_DIR=web|echo "build: set WEB_BUILD_NEXT to the target that builds the binary embedding the web app" >&2; exit 2
 web.mk parity.mk|demo-parity WEB_DIR=web SCENARIO=a/b|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="a/b" PARITY_DEMO_PORT="5180" PARITY_PROTO_PORT="5181" npm run parity
 web.mk parity.mk|demo-parity WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="" PARITY_DEMO_PORT="5290" PARITY_PROTO_PORT="5291" npm run parity
 web.mk parity.mk|demo-parity-accept WEB_DIR=web|echo "demo-parity-accept: REASON= is required: say why these differences are accepted" >&2; exit 2
