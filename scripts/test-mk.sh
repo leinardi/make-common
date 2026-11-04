@@ -74,6 +74,14 @@ web.mk|web-build WEB_DIR=web|npm --prefix "web" run build
 web.mk|web-lint WEB_DIR=web|npm --prefix "web" run typecheck
 web.mk|build WEB_DIR=web WEB_BUILD_NEXT=help|make help
 web.mk go.mk|build WEB_DIR=web|make go-build
+web.mk rust.mk|build WEB_DIR=web|make rust-dist
+rust.mk|rust-build|cargo build --workspace --all-targets --all-features --locked
+rust.mk|rust-build RUST_STAMP_PREFIX=MYAPP GIT_VERSION=v1.2.3 GIT_COMMIT=abc BUILD_DATE=d|MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc" MYAPP_DATE="d" cargo build --workspace --all-targets --all-features --locked
+rust.mk|rust-clippy RUST_FEATURES=|cargo clippy --workspace --all-targets  --locked -- -D warnings
+rust.mk|rust-dist BIN_NAME=myapp|cargo build --release --locked --bin "myapp"
+rust.mk|rust-dist BIN_NAME=myapp CARGO_TARGET_DIR=/tmp/t|cp "/tmp/t/release/myapp" "dist/myapp"
+rust.mk|rust-run RUST_RUN_BIN=myapp ARGS=--help|cargo run --locked --bin "myapp" -- --help
+rust.mk|rust-deny|cargo deny --workspace check
 web.mk|build WEB_DIR=web|echo "build: set WEB_BUILD_NEXT to the target that builds the binary embedding the web app" >&2; exit 2
 web.mk parity.mk|demo-parity WEB_DIR=web SCENARIO=a/b|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="a/b" PARITY_DEMO_PORT="5180" PARITY_PROTO_PORT="5181" npm run parity
 web.mk parity.mk|demo-parity WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="" PARITY_DEMO_PORT="5290" PARITY_PROTO_PORT="5291" npm run parity
