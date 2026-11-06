@@ -82,6 +82,15 @@ rust.mk|rust-dist BIN_NAME=myapp|cargo build --release --locked --bin "myapp"
 rust.mk|rust-dist BIN_NAME=myapp CARGO_TARGET_DIR=/tmp/t|cp "/tmp/t/release/myapp" "dist/myapp"
 rust.mk|rust-run RUST_RUN_BIN=myapp ARGS=--help|cargo run --locked --bin "myapp" -- --help
 rust.mk|rust-deny|cargo deny --workspace check
+rust.mk|rust-build RUST_STAMP_PREFIX=MYAPP RUST_BUILD_ENV=|cargo build --workspace --all-targets --all-features --locked
+rust.mk|rust-dist BIN_NAME=myapp RUST_DIST_PROFILE=dist-local|cargo build --profile "dist-local" --locked --bin "myapp"
+rust.mk|rust-dist BIN_NAME=myapp RUST_DIST_PROFILE=dist-local|cp "target/dist-local/myapp" "dist/myapp"
+rust.mk|rust-dist BIN_NAME=myapp RUST_DIST_PROFILE=dev CARGO_TARGET_DIR=/tmp/t|cp "/tmp/t/debug/myapp" "dist/myapp"
+rust.mk|rust-dist RUST_STAMP_PREFIX=MYAPP RUST_BUILD_ENV= GIT_VERSION=v1 GIT_COMMIT=abc BUILD_DATE=d|MYAPP_VERSION="v1" MYAPP_COMMIT="abc" MYAPP_DATE="d" cargo build --release --locked --bin "app"
+rust.mk|rust-clean-stale|cargo sweep --time "7"
+rust.mk|rust-clean-stale RUST_SWEEP_DAYS=30|cargo sweep --time "30"
+rust.mk|rust-clean-stale|cargo sweep --installed
+web.mk|web-build WEB_DIR=web WEB_DIST_SYNC_DIR=web/dist|npm --prefix "web" run build -- --outDir ".dist-staging" --emptyOutDir && rsync -r --checksum --delete "web/.dist-staging/" "web/dist/"
 web.mk|build WEB_DIR=web|echo "build: set WEB_BUILD_NEXT to the target that builds the binary embedding the web app" >&2; exit 2
 web.mk parity.mk|demo-parity WEB_DIR=web SCENARIO=a/b|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="a/b" PARITY_DEMO_PORT="5180" PARITY_PROTO_PORT="5181" npm run parity
 web.mk parity.mk|demo-parity WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="" PARITY_DEMO_PORT="5290" PARITY_PROTO_PORT="5291" npm run parity
@@ -141,5 +150,79 @@ if out=$(make --no-print-directory -n -C "$WORK" demo-parity 2>&1) ||
 else
 	echo "ok   - parity.mk: a parity goal without web.mk stops"
 fi
+
+# web.mk's WEB_DIST_SYNC_DIR, run for real (make -n cannot see where the build writes): a fake npm
+# that, like npm and vite, resolves the build's --outDir against --prefix. A second build of the
+# same app leaves the synced files' modification times alone, a changed file is updated, a file the
+# build no longer makes is deleted, and nothing lands under WEB_DIR/WEB_DIR. Once with WEB_DIR
+# relative to the consumer's directory and once absolute.
+mkdir -p "$WORK/bin"
+cat >"$WORK/bin/npm" <<'NPM'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $1 == --prefix ]] || exit 2
+cd "$2"
+shift 2
+[[ $1 == ci ]] && exit 0
+[[ "$1 $2 $3 $4" == "run build -- --outDir" ]] || exit 2
+out=$5
+rm -rf "$out"
+mkdir -p "$out"
+cp -R "$APP_SRC/." "$out/"
+NPM
+chmod +x "$WORK/bin/npm"
+
+# A file's modification time in seconds: GNU stat, else BSD/macOS stat.
+mtime() {
+	stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"
+}
+
+sync_case() {
+	local label=$1 web_dir=$2 consumer=$WORK/sync-$1
+	mkdir -p "$consumer/web/node_modules" "$consumer/src"
+	touch "$consumer/web/package.json" "$consumer/web/package-lock.json"
+	touch "$consumer/web/node_modules/.package-lock.json"
+	printf 'one\n' >"$consumer/src/index.html"
+	printf 'two\n' >"$consumer/src/app.js"
+	printf 'gone\n' >"$consumer/src/old.js"
+	cat >"$consumer/Makefile" <<MAKEFILE
+REPO_ROOT := $consumer
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/web.mk
+MAKEFILE
+	local build=(make --no-print-directory -s -C "$consumer" web-build WEB_DIR="$web_dir"
+		WEB_DIST_SYNC_DIR="$web_dir/dist")
+	local dist=$consumer/web/dist problem="" before=""
+	PATH="$WORK/bin:$PATH" APP_SRC="$consumer/src" "${build[@]}" >/dev/null 2>&1 ||
+		problem="the first build failed"
+	if [[ -z $problem ]]; then
+		# touch -t is POSIX; the time it sets is read back rather than assumed.
+		touch -t 200101010000 "$dist/index.html" "$dist/app.js"
+		before=$(mtime "$dist/index.html")
+		printf 'three\n' >"$consumer/src/app.js"
+		rm "$consumer/src/old.js"
+		PATH="$WORK/bin:$PATH" APP_SRC="$consumer/src" "${build[@]}" >/dev/null 2>&1 ||
+			problem="the second build failed"
+	fi
+	if [[ -z $problem ]]; then
+		if [[ $(mtime "$dist/index.html") != "$before" ]]; then
+			problem="an unchanged file got a new modification time"
+		elif [[ $(cat "$dist/app.js") != three ]]; then
+			problem="a changed file was not updated"
+		elif [[ -e $dist/old.js ]]; then
+			problem="a file the build no longer makes was not deleted"
+		elif [[ -e $consumer/web/web ]]; then
+			problem="the build wrote under WEB_DIR/WEB_DIR"
+		fi
+	fi
+	if [[ -n $problem ]]; then
+		echo "FAIL - web.mk: WEB_DIST_SYNC_DIR with $label WEB_DIR: $problem"
+		fail=1
+	else
+		echo "ok   - web.mk: WEB_DIST_SYNC_DIR with $label WEB_DIR syncs only changed files"
+	fi
+}
+sync_case relative web
+sync_case absolute "$WORK/sync-absolute/web"
 
 exit "$fail"
