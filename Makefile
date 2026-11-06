@@ -32,5 +32,6 @@ include $(REPO_ROOT)/.mk/password.mk
 .PHONY: test
 test: ## Smoke-test every snippet; test the bootstrap script and the licence header check offline
 	@"$(REPO_ROOT)/scripts/test-mk.sh"
+	@"$(REPO_ROOT)/scripts/test-mk-defaults.sh"
 	@"$(REPO_ROOT)/scripts/test-bootstrap.sh"
 	@"$(REPO_ROOT)/scripts/test-license-headers.sh"

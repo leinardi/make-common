@@ -1,0 +1,219 @@
+### rust.mk |  | rust-build
+cargo build --workspace --all-targets --all-features --locked|
+### status 0
+### rust.mk |  | rust-dist
+cargo build --release --locked --bin "app"|
+mkdir -p "dist"|
+cp "target/release/app" "dist/app"|
+### status 0
+### rust.mk |  | rust-run
+cargo run --locked  -- |
+### status 0
+### rust.mk |  | rust-test
+cargo test --workspace --locked|
+### status 0
+### rust.mk |  | rust-clippy
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings|
+### status 0
+### rust.mk |  | rust-fmt
+cargo fmt --all|
+### status 0
+### rust.mk |  | rust-fmt-check
+cargo fmt --all --check|
+### status 0
+### rust.mk |  | rust-doc
+RUSTDOCFLAGS=" -D warnings" cargo doc --workspace --all-features --no-deps --locked|
+### status 0
+### rust.mk |  | rust-deny
+cargo deny --workspace check|
+### status 0
+### rust.mk |  | verify-rust
+cargo build --workspace --all-targets --all-features --locked|
+cargo fmt --all --check|
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings|
+cargo test --workspace --locked|
+RUSTDOCFLAGS=" -D warnings" cargo doc --workspace --all-features --no-deps --locked|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-build
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --workspace --all-targets --all-features --locked|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-dist
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --release --locked --bin "myapp"|
+mkdir -p "dist"|
+cp "target/release/myapp" "dist/myapp"|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-run
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo run --locked  -- |
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-test
+cargo test --workspace --locked|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-clippy
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-fmt
+cargo fmt --all|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-fmt-check
+cargo fmt --all --check|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-doc
+RUSTDOCFLAGS=" -D warnings" cargo doc --workspace --all-features --no-deps --locked|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-deny
+cargo deny --workspace check|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | verify-rust
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --workspace --all-targets --all-features --locked|
+cargo fmt --all --check|
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings|
+cargo test --workspace --locked|
+RUSTDOCFLAGS=" -D warnings" cargo doc --workspace --all-features --no-deps --locked|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-build
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --workspace --all-targets --all-features --locked|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-dist
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --release --locked --bin "myapp"|
+mkdir -p "dist"|
+cp "/tmp/t/release/myapp" "dist/myapp"|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-run
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo run --locked --bin "myapp" -- --help|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-test
+cargo test --workspace --locked|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-clippy
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-fmt
+cargo fmt --all|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-fmt-check
+cargo fmt --all --check|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-doc
+RUSTDOCFLAGS=" -D warnings" cargo doc --workspace --all-features --no-deps --locked|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | rust-deny
+cargo deny --workspace check|
+### status 0
+### rust.mk | RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp | verify-rust
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --workspace --all-targets --all-features --locked|
+cargo fmt --all --check|
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings|
+cargo test --workspace --locked|
+RUSTDOCFLAGS=" -D warnings" cargo doc --workspace --all-features --no-deps --locked|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | web-install
+npm --prefix "web" ci|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | web-update
+npm --prefix "web" update|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | web-dev
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run dev|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | web-demo
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run dev:demo|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | web-build
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run build|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | web-build-demo
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run build:demo|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | web-test
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run test|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | web-lint
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run lint|
+npm --prefix "web" run typecheck|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | api-types
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run api-types|
+### status 0
+### web.mk rust.mk | WEB_DIR=web | build
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run build|
+make rust-dist|
+cargo build --release --locked --bin "app"|
+mkdir -p "dist"|
+cp "target/release/app" "dist/app"|
+### status 0
+### web.mk rust.mk |  | web-install
+npm --prefix "@WORK@/web" ci|
+### status 0
+### web.mk rust.mk |  | web-update
+npm --prefix "@WORK@/web" update|
+### status 0
+### web.mk rust.mk |  | web-dev
+npm --prefix "@WORK@/web" ci|
+touch "@WORK@/web/node_modules/.package-lock.json"|
+npm --prefix "@WORK@/web" run dev|
+### status 0
+### web.mk rust.mk |  | web-demo
+npm --prefix "@WORK@/web" ci|
+touch "@WORK@/web/node_modules/.package-lock.json"|
+npm --prefix "@WORK@/web" run dev:demo|
+### status 0
+### web.mk rust.mk |  | web-build
+npm --prefix "@WORK@/web" ci|
+touch "@WORK@/web/node_modules/.package-lock.json"|
+npm --prefix "@WORK@/web" run build|
+### status 0
+### web.mk rust.mk |  | web-build-demo
+npm --prefix "@WORK@/web" ci|
+touch "@WORK@/web/node_modules/.package-lock.json"|
+npm --prefix "@WORK@/web" run build:demo|
+### status 0
+### web.mk rust.mk |  | web-test
+npm --prefix "@WORK@/web" ci|
+touch "@WORK@/web/node_modules/.package-lock.json"|
+npm --prefix "@WORK@/web" run test|
+### status 0
+### web.mk rust.mk |  | web-lint
+npm --prefix "@WORK@/web" ci|
+touch "@WORK@/web/node_modules/.package-lock.json"|
+npm --prefix "@WORK@/web" run lint|
+npm --prefix "@WORK@/web" run typecheck|
+### status 0
+### web.mk rust.mk |  | api-types
+npm --prefix "@WORK@/web" ci|
+touch "@WORK@/web/node_modules/.package-lock.json"|
+npm --prefix "@WORK@/web" run api-types|
+### status 0
+### web.mk rust.mk |  | build
+npm --prefix "@WORK@/web" ci|
+touch "@WORK@/web/node_modules/.package-lock.json"|
+npm --prefix "@WORK@/web" run build|
+make rust-dist|
+cargo build --release --locked --bin "app"|
+mkdir -p "dist"|
+cp "target/release/app" "dist/app"|
+### status 0
+### web.mk rust.mk | RUST_STAMP_PREFIX=MYAPP WEB_DIR=web BIN_NAME=myapp | build
+npm --prefix "web" ci|
+touch "web/node_modules/.package-lock.json"|
+npm --prefix "web" run build|
+make rust-dist|
+MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --release --locked --bin "myapp"|
+mkdir -p "dist"|
+cp "target/release/myapp" "dist/myapp"|
+### status 0
