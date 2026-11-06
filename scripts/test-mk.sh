@@ -82,6 +82,14 @@ rust.mk|rust-dist BIN_NAME=myapp|cargo build --release --locked --bin "myapp"
 rust.mk|rust-dist BIN_NAME=myapp CARGO_TARGET_DIR=/tmp/t|cp "/tmp/t/release/myapp" "dist/myapp"
 rust.mk|rust-run RUST_RUN_BIN=myapp ARGS=--help|cargo run --locked --bin "myapp" -- --help
 rust.mk|rust-deny|cargo deny --workspace check
+rust.mk|rust-build RUST_STAMP_PREFIX=MYAPP RUST_BUILD_ENV=|cargo build --workspace --all-targets --all-features --locked
+rust.mk|rust-dist BIN_NAME=myapp RUST_DIST_PROFILE=dist-local|cargo build --profile "dist-local" --locked --bin "myapp"
+rust.mk|rust-dist BIN_NAME=myapp RUST_DIST_PROFILE=dist-local|cp "target/dist-local/myapp" "dist/myapp"
+rust.mk|rust-dist BIN_NAME=myapp RUST_DIST_PROFILE=dev CARGO_TARGET_DIR=/tmp/t|cp "/tmp/t/debug/myapp" "dist/myapp"
+rust.mk|rust-dist RUST_STAMP_PREFIX=MYAPP RUST_BUILD_ENV= GIT_VERSION=v1 GIT_COMMIT=abc BUILD_DATE=d|MYAPP_VERSION="v1" MYAPP_COMMIT="abc" MYAPP_DATE="d" cargo build --release --locked --bin "app"
+rust.mk|rust-clean-stale|cargo sweep --time "7"
+rust.mk|rust-clean-stale RUST_SWEEP_DAYS=30|cargo sweep --time "30"
+rust.mk|rust-clean-stale|cargo sweep --installed
 web.mk|build WEB_DIR=web|echo "build: set WEB_BUILD_NEXT to the target that builds the binary embedding the web app" >&2; exit 2
 web.mk parity.mk|demo-parity WEB_DIR=web SCENARIO=a/b|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="a/b" PARITY_DEMO_PORT="5180" PARITY_PROTO_PORT="5181" npm run parity
 web.mk parity.mk|demo-parity WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="" PARITY_DEMO_PORT="5290" PARITY_PROTO_PORT="5291" npm run parity
