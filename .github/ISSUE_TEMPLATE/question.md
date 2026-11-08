@@ -43,10 +43,11 @@ assignees: []
 
 <!-- Fill in what makes sense for your question, or remove fields that don't apply. -->
 
-* Project version / commit SHA: `?`
+* make-common version (`cat .mk/.mk-common-version` in your repository): `?`
+* GNU Make version (`make --version`): `?`
+* Shell and version: `?`
 * Operating system and version: `?`
-* Runtime and version (e.g., Node, Python, Java): `?`
-* Any relevant tooling / dependencies and versions: `?`
+* Calling repository, if public: `?`
 
 ---
 
