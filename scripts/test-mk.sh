@@ -67,6 +67,7 @@ RECIPES=$(
 	cat <<'EOF'
 ansible-vault.mk|vault-decrypt ENV=dev|ansible-vault decrypt \
 ansible-vault.mk|vault-decrypt ENV=dev ANSIBLE_VAULT=/opt/ansible/bin/ansible-vault|/opt/ansible/bin/ansible-vault decrypt \
+password.mk|password|env LC_ALL=C tr -dc 'A-Za-z0-9_.+=,-' < /dev/urandom | head -c 99; echo
 go.mk|go-lint|pre-commit run "golangci-lint-full" --all-files
 go.mk|go-lint GO_LINT_HOOK=golangci-lint-repo-mod|pre-commit run "golangci-lint-repo-mod" --all-files
 web.mk|web-build WEB_DIR=web|npm --prefix "web" ci
@@ -134,6 +135,22 @@ MAKEFILE
 	fi
 	echo "ok   - $name: make $args"
 done <<<"$RECIPES"
+
+# Run password generation too: a malformed tr range can fail while the recipe's
+# final echo still makes make succeed. Check stderr, length and allowed bytes.
+if ! out=$(make --no-print-directory -s -f "$ROOT/.mk/password.mk" password 2>"$WORK/password.err") ||
+	[[ -s "$WORK/password.err" ]]; then
+	echo "FAIL - password.mk: password generation failed or wrote stderr"
+	fail=1
+else
+	password=${out#*$'\n'}
+	if [[ ${#password} -ne 99 || $password == *[!a-zA-Z0-9_.+=,-]* ]]; then
+		echo "FAIL - password.mk: expected 99 PostgreSQL-compatible characters"
+		fail=1
+	else
+		echo "ok   - password.mk: generates 99 PostgreSQL-compatible characters"
+	fi
+fi
 
 # parity.mk without web.mk: a parity goal stops and names web.mk, rather than
 # running npm with no WEB_DIR.
