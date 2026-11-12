@@ -34,12 +34,22 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
+# The snippets a snippet needs included before it, as a consumer lists them.
+needs() {
+	case $1 in
+	rust-release.mk) echo rust.mk ;;
+	*) ;;
+	esac
+}
+
 fail=0
 for mk in "$ROOT"/.mk/*.mk; do
 	name=$(basename "$mk")
+	needed=$(for n in $(needs "$name"); do printf 'include %s/.mk/%s\n' "$ROOT" "$n"; done)
 	cat >"$WORK/Makefile" <<MAKEFILE
 REPO_ROOT := $WORK
 include $ROOT/.mk/help.mk
+$needed
 include $mk
 include $mk
 MAKEFILE
@@ -93,6 +103,14 @@ rust.mk|rust-clean-stale RUST_SWEEP_DAYS=30|cargo sweep --time "30"
 rust.mk|rust-clean-stale|cargo sweep --installed
 web.mk|web-build WEB_DIR=web WEB_DIST_SYNC_DIR=web/dist|npm --prefix "web" run build -- --outDir ".dist-staging" --emptyOutDir && rsync -r --checksum --delete "web/.dist-staging/" "web/dist/"
 web.mk|build WEB_DIR=web|echo "build: set WEB_BUILD_NEXT to the target that builds the binary embedding the web app" >&2; exit 2
+rust.mk rust-release.mk|rust-release-binaries BIN_NAME=myapp REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F|RUSTFLAGS="F"  cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin myapp
+rust.mk rust-release.mk|rust-release-binaries BIN_NAME=myapp REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F|cp "/r/target/aarch64-unknown-linux-musl/release/myapp" "/r/dist/myapp-linux-arm64"
+rust.mk rust-release.mk|rust-release-checksums BIN_NAME=myapp REPO_ROOT=/r|cd "/r/dist" && sha256sum "myapp-linux-amd64" "myapp-linux-arm64" > checksums.txt
+rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent RUST_RELEASE_PLATFORMS=linux/amd64 REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_STAMP_PREFIX=APP GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|RUSTFLAGS="F"  APP_VERSION="v1" APP_COMMIT="c" APP_DATE="d" cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin controller --bin agent
+rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent RUST_RELEASE_PLATFORMS=linux/amd64 REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F|cp "/r/target/x86_64-unknown-linux-musl/release/controller" "/r/dist/controller-linux-amd64"
+rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent RUST_RELEASE_PLATFORMS=linux/amd64 REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F|cp "/r/target/x86_64-unknown-linux-musl/release/agent" "/r/dist/agent-linux-amd64"
+rust.mk rust-release.mk|rust-release-checksums RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent REPO_ROOT=/r|cd "/r/dist" && sha256sum "controller-linux-amd64" "controller-linux-arm64" "agent-linux-amd64" "agent-linux-arm64" > checksums.txt
+rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_PREREQS=rust-fmt REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F|cargo fmt --all
 web.mk parity.mk|demo-parity WEB_DIR=web SCENARIO=a/b|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="a/b" PARITY_DEMO_PORT="5180" PARITY_PROTO_PORT="5181" npm run parity
 web.mk parity.mk|demo-parity WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="" PARITY_DEMO_PORT="5290" PARITY_PROTO_PORT="5291" npm run parity
 web.mk parity.mk|demo-parity-accept WEB_DIR=web|echo "demo-parity-accept: REASON= is required: say why these differences are accepted" >&2; exit 2
@@ -171,6 +189,38 @@ if out=$(make --no-print-directory -n -C "$WORK" demo-parity 2>&1) ||
 	fail=1
 else
 	echo "ok   - parity.mk: a parity goal without web.mk stops"
+fi
+
+# rust-release.mk without rust.mk: make stops at the include and names rust.mk, rather than
+# building with an empty CARGO and BIN_NAME.
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust-release.mk
+MAKEFILE
+if out=$(make --no-print-directory -n -C "$WORK" rust-release-binaries 2>&1) ||
+	! grep -q 'rust-release.mk needs rust.mk' <<<"$out"; then
+	echo "FAIL - rust-release.mk: including it without rust.mk does not stop"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust-release.mk: including it without rust.mk stops"
+fi
+
+# An empty RUST_RELEASE_BINS stops make, rather than checksumming stdin.
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust.mk
+include $ROOT/.mk/rust-release.mk
+MAKEFILE
+if out=$(make --no-print-directory -n -C "$WORK" rust-release-checksums RUST_RELEASE_BINS= 2>&1) ||
+	! grep -q 'RUST_RELEASE_BINS is empty' <<<"$out"; then
+	echo "FAIL - rust-release.mk: an empty RUST_RELEASE_BINS does not stop"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust-release.mk: an empty RUST_RELEASE_BINS stops"
 fi
 
 # web.mk's WEB_DIST_SYNC_DIR, run for real (make -n cannot see where the build writes): a fake npm

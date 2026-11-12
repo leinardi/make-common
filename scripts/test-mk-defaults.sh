@@ -21,8 +21,8 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# Holds the defaults of rust.mk and web.mk to v1: the whole `make -n` output of every target, in
-# the scenarios below, must match scripts/testdata/mk-defaults.golden byte for byte. An opt-in a
+# Holds the defaults of rust.mk, rust-release.mk and web.mk to v1: the whole `make -n` output of
+# every target, in the scenarios below, must match scripts/testdata/mk-defaults.golden byte for byte. An opt-in a
 # consumer has not set must change nothing it runs. Each line ends with a `|` marker, so a
 # trailing space in a recipe is part of the comparison too.
 #
@@ -42,6 +42,22 @@ FIXED=(GIT_COMMIT=abc123 GIT_VERSION=v1.2.3 BUILD_DATE=2026-01-02T03:04:05Z)
 unset CARGO_TARGET_DIR RUSTDOCFLAGS MAKEFLAGS MFLAGS
 
 RUST_TARGETS="rust-build rust-dist rust-run rust-test rust-clippy rust-fmt rust-fmt-check rust-doc rust-deny verify-rust"
+RUST_RELEASE_TARGETS="rust-zigbuild-check rust-release-binaries rust-release-checksums rust-release-dist rust-zigbuild-install"
+# rust-release.mk asks rustc for its sysroot and commit, and reads HOME and CARGO_HOME, for the
+# remapped paths: those are the machine's, so a fake rustc answers with fixed ones and HOME is
+# fixed, and the defaults that read them are still the ones compared.
+mkdir -p "$WORK/bin"
+cat >"$WORK/bin/rustc" <<'RUSTC'
+#!/usr/bin/env bash
+case "$*" in
+--print\ sysroot) echo /sysroot ;;
+-vV) printf 'rustc 1.0.0\ncommit-hash: 0123abcd\n' ;;
+*) exit 2 ;;
+esac
+RUSTC
+chmod +x "$WORK/bin/rustc"
+export PATH="$WORK/bin:$PATH" HOME=/home/user
+unset CARGO_HOME
 WEB_TARGETS="web-install web-update web-dev web-demo web-build web-build-demo web-test web-lint api-types build"
 
 # Scenarios, one per line: <snippets>|<variable assignments>|<targets>.
@@ -50,6 +66,8 @@ SCENARIOS=$(
 rust.mk||$RUST_TARGETS
 rust.mk|RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp|$RUST_TARGETS
 rust.mk|RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp|$RUST_TARGETS
+rust.mk rust-release.mk||$RUST_RELEASE_TARGETS
+rust.mk rust-release.mk|RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp|$RUST_RELEASE_TARGETS
 web.mk rust.mk|WEB_DIR=web|$WEB_TARGETS
 web.mk rust.mk||$WEB_TARGETS
 web.mk rust.mk|RUST_STAMP_PREFIX=MYAPP WEB_DIR=web BIN_NAME=myapp|build
@@ -94,4 +112,4 @@ if ! diff -u "$GOLDEN" <(printf '%s\n' "$actual"); then
 	echo "FAIL - mk defaults: make -n output differs from scripts/testdata/mk-defaults.golden"
 	exit 1
 fi
-echo "ok   - mk defaults: rust.mk and web.mk run what v1 ran"
+echo "ok   - mk defaults: rust.mk, rust-release.mk and web.mk run what v1 ran"
