@@ -84,21 +84,53 @@ rust_release_asset = $(RUST_RELEASE_DIR)/$(or $(2),$(BIN_NAME))-$(subst /,-,$(1)
 # release writes it after adding the assets a recovery took from what is already published.
 RUST_RELEASE_SHIPPED_PLATFORMS ?= linux/amd64 linux/arm64
 
+# Where cargo writes: its effective target directory (the binaries) and build directory (a build
+# script's OUT_DIR, which is the target directory unless build.build-dir moves it), as cargo
+# metadata reports them, so CARGO_TARGET_DIR, CARGO_BUILD_TARGET_DIR, build.target-dir and
+# build.build-dir in a .cargo/config.toml all count (rust.mk's RUST_TARGET_DIR reads the first
+# only). Those variables and CARGO_HOME (its config.toml counts too) are passed to cargo by name:
+# GNU make before 4.4 runs $(shell) without the command line's and the exported ones, which the
+# build's recipe has. Recursive and read once per make run, so cargo is asked only by a recipe
+# that copies; a consumer may set either instead. The keys are matched where cargo prints them,
+# before version and workspace_root, so a [workspace.metadata] or [package.metadata] key of the
+# same name is not read. A path holding a backslash or a double quote (escaped in the JSON) is
+# not read: set it then. A path holding a space stops make: RUSTFLAGS cannot remap it.
+_RUST_RELEASE_CARGO_ENV = $(foreach var,CARGO_HOME CARGO_TARGET_DIR CARGO_BUILD_TARGET_DIR CARGO_BUILD_BUILD_DIR,$(if $($(var)),$(var)="$($(var))"))
+_RUST_RELEASE_METADATA = $(shell cd "$(REPO_ROOT)" && $(_RUST_RELEASE_CARGO_ENV) $(CARGO) metadata --format-version 1 --no-deps 2>/dev/null | sed -n -e 's/.*"target_directory":"\([^"\\ ]*\)","build_directory":"\([^"\\ ]*\)","version":1,"workspace_root":".*/\1 \2/p' -e t -e 's/.*"target_directory":"\([^"\\ ]*\)","version":1,"workspace_root":".*/\1/p')
+_rust_release_metadata = $(or $(_RUST_RELEASE_DIRS),$(eval _RUST_RELEASE_DIRS := $$(_RUST_RELEASE_METADATA))$(_RUST_RELEASE_DIRS))
+RUST_RELEASE_TARGET_DIR ?= $(word 1,$(_rust_release_metadata))
+RUST_RELEASE_BUILD_DIR  ?= $(or $(word 2,$(_rust_release_metadata)),$(RUST_RELEASE_TARGET_DIR))
+rust_release_target_dir = $(if $(word 3,$(RUST_RELEASE_TARGET_DIR) $(RUST_RELEASE_BUILD_DIR)),$(error a target or build directory with a space cannot be remapped))$(or $(RUST_RELEASE_TARGET_DIR),$(error cannot read cargo's target directory; set RUST_RELEASE_TARGET_DIR))
+# The directories cargo writes to other than the checkout's target/ (outside it, or another one
+# inside it), remapped to /src/target, where a default build has them, so a build with another
+# directory gives the same bytes; of two nested ones the inner comes last. A target directory
+# that is the checkout itself, or nesting three deep with the cargo home, is not supported.
+_rust_release_outside_one = $(if $(filter $(REPO_ROOT)/target,$(patsubst %/,%,$(1))),,$(patsubst %/,%,$(1)))
+_rust_release_nested_last = $(if $(filter $(2)/%,$(1)),$(2) $(1),$(1) $(2))
+_rust_release_outside = $(call _rust_release_nested_last,$(call _rust_release_outside_one,$(rust_release_target_dir)),$(call _rust_release_outside_one,$(filter-out $(rust_release_target_dir),$(RUST_RELEASE_BUILD_DIR))))
+
 # The static build of every binary for one Rust target: cargo-zigbuild with zig as the C compiler
 # and linker, the version stamps of rust-dist, and the checkout and the cargo home remapped, so a
 # binary carries no path of the machine that built it and a rebuild of the same commit gives the
-# same bytes. The toolchain's rust-src, when it is installed, is mapped back to the /rustc/<commit>
-# the standard library was built with: rustc otherwise writes the local copy's path, under the
-# rustup home, in place of that prefix, so a machine with rust-src and one without (CI's minimal
-# profile) would build different bytes. RUSTFLAGS is set, not inherited: a flag from the
-# environment would change the shipped bytes. With --target, cargo applies it to the binaries and
-# not to build scripts. Recursive (=), so rustc is asked only by a recipe that builds.
+# same bytes. A target or build directory other than the checkout's target/ is remapped too;
+# rustc applies the last prefix that matches, so the checkout, the cargo home or rust-src inside
+# one is remapped again after it. The toolchain's rust-src, when it is installed, is mapped back
+# to the /rustc/<commit> the standard library was built with: rustc otherwise writes the local
+# copy's path, under the rustup home, in place of that prefix, so a machine with rust-src and one
+# without (CI's minimal profile) would build different bytes. RUSTFLAGS is set, not inherited: a
+# flag from the environment would change the shipped bytes. With --target, cargo applies it to
+# the binaries and not to build scripts. Recursive (=), so rustc is asked only by a recipe that
+# builds.
 RUST_RELEASE_CARGO_HOME = $(or $(CARGO_HOME),$(HOME)/.cargo)
 RUST_RELEASE_RUST_SRC   = $(shell cd "$(REPO_ROOT)" && rustc --print sysroot)/lib/rustlib/src/rust
 RUST_RELEASE_RUSTC_HASH = $(shell cd "$(REPO_ROOT)" && rustc -vV | sed -n 's/^commit-hash: //p')
-RUST_RELEASE_RUSTFLAGS  = --remap-path-prefix=$(REPO_ROOT)=/src \
-  --remap-path-prefix=$(RUST_RELEASE_CARGO_HOME)=/cargo \
-  --remap-path-prefix=$(RUST_RELEASE_RUST_SRC)=/rustc/$(RUST_RELEASE_RUSTC_HASH)
+# The remaps, as prefix=replacement: the fixed ones, then the outside directories, then again
+# each fixed one inside an outside directory, so for every path the longest prefix comes last.
+_RUST_RELEASE_REMAPS    = $(REPO_ROOT)=/src $(RUST_RELEASE_CARGO_HOME)=/cargo \
+  $(RUST_RELEASE_RUST_SRC)=/rustc/$(RUST_RELEASE_RUSTC_HASH)
+_rust_release_remaps    = $(_RUST_RELEASE_REMAPS) $(addsuffix =/src/target,$(_rust_release_outside)) \
+  $(foreach remap,$(_RUST_RELEASE_REMAPS),$(if $(filter $(addsuffix /%,$(_rust_release_outside)),$(firstword $(subst =, ,$(remap)))),$(remap)))
+RUST_RELEASE_RUSTFLAGS  = $(strip $(addprefix --remap-path-prefix=,$(_rust_release_remaps)))
 # $(call rust_static_build,<Rust target>)
 rust_static_build = RUSTFLAGS="$(RUST_RELEASE_RUSTFLAGS)" $(RUST_VERSION_ENV) \
   $(CARGO) zigbuild --release --locked --target $(1) $(addprefix --bin ,$(RUST_RELEASE_BINS))
@@ -127,7 +159,7 @@ rust-zigbuild-check: ## Fail unless the zig and cargo-zigbuild on PATH are the p
 # One binary's copy into its asset: $(call _RUST_RELEASE_COPY,<os/arch>,<bin>). The blank line
 # ends the recipe line.
 define _RUST_RELEASE_COPY
-	cp "$(REPO_ROOT)/target/$(call rust_release_triple,$(1))/release/$(2)" "$(call rust_release_asset,$(1),$(2))"
+	cp "$(rust_release_target_dir)/$(call rust_release_triple,$(1))/release/$(2)" "$(call rust_release_asset,$(1),$(2))"
 
 endef
 

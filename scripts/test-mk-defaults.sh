@@ -43,9 +43,10 @@ unset CARGO_TARGET_DIR RUSTDOCFLAGS MAKEFLAGS MFLAGS
 
 RUST_TARGETS="rust-build rust-dist rust-run rust-test rust-clippy rust-fmt rust-fmt-check rust-doc rust-deny verify-rust"
 RUST_RELEASE_TARGETS="rust-zigbuild-check rust-release-binaries rust-release-checksums rust-release-dist rust-zigbuild-install"
-# rust-release.mk asks rustc for its sysroot and commit, and reads HOME and CARGO_HOME, for the
-# remapped paths: those are the machine's, so a fake rustc answers with fixed ones and HOME is
-# fixed, and the defaults that read them are still the ones compared.
+# rust-release.mk asks rustc for its sysroot and commit, cargo for its target directory, and reads
+# HOME and CARGO_HOME, for the remapped paths and the copies: those are the machine's, so a fake
+# rustc and a fake cargo answer with fixed ones (cargo with the checkout's target/, its default)
+# and HOME is fixed, and the defaults that read them are still the ones compared.
 mkdir -p "$WORK/bin"
 cat >"$WORK/bin/rustc" <<'RUSTC'
 #!/usr/bin/env bash
@@ -56,6 +57,12 @@ case "$*" in
 esac
 RUSTC
 chmod +x "$WORK/bin/rustc"
+cat >"$WORK/bin/cargo" <<CARGO
+#!/usr/bin/env bash
+[[ "\$*" == "metadata --format-version 1 --no-deps" ]] || exit 2
+printf '{"packages":[],"target_directory":"%s","version":1,"workspace_root":"%s"}\\n' "$WORK/target" "$WORK"
+CARGO
+chmod +x "$WORK/bin/cargo"
 export PATH="$WORK/bin:$PATH" HOME=/home/user
 unset CARGO_HOME
 IMAGE_TARGETS="image-build-prebuilt image-test image-build-test"
