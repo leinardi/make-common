@@ -38,6 +38,7 @@ trap 'rm -rf "$WORK"' EXIT
 needs() {
 	case $1 in
 	rust-release.mk) echo rust.mk ;;
+	image.mk) echo rust.mk docker.mk rust-release.mk ;;
 	*) ;;
 	esac
 }
@@ -111,6 +112,13 @@ rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_BINS=controller RUST_
 rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent RUST_RELEASE_PLATFORMS=linux/amd64 REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F|cp "/r/target/x86_64-unknown-linux-musl/release/agent" "/r/dist/agent-linux-amd64"
 rust.mk rust-release.mk|rust-release-checksums RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent REPO_ROOT=/r|cd "/r/dist" && sha256sum "controller-linux-amd64" "controller-linux-arm64" "agent-linux-amd64" "agent-linux-arm64" > checksums.txt
 rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_PREREQS=rust-fmt REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F|cargo fmt --all
+rust.mk docker.mk rust-release.mk image.mk|image-build-prebuilt BIN_NAME=myapp REPO_ROOT=/r IMAGE_PLATFORM=linux/arm64 GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|docker buildx build --load --platform "linux/arm64" --target prebuilt --build-context dist="/r/dist" -f "deployments/docker/Dockerfile" -t "myapp:prebuilt-linux-arm64" --build-arg VERSION="v1" --build-arg COMMIT="c" --build-arg DATE="d" "."
+rust.mk docker.mk rust-release.mk image.mk|image-test BIN_NAME=myapp REPO_ROOT=/r IMAGE_PLATFORM=linux/arm64 IMAGE_TEST_TIER=reduced GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|"/r/scripts/image-test.sh" --tier "reduced" --image "myapp:prebuilt-linux-arm64" --platform "linux/arm64" --binary "/r/dist/myapp-linux-arm64" --expect-version "v1 c d"
+rust.mk docker.mk rust-release.mk image.mk|image-build-test BIN_NAME=myapp REPO_ROOT=/r GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|make --no-print-directory image-build-prebuilt-myapp GIT_VERSION="v1" GIT_COMMIT="c" BUILD_DATE="d"
+rust.mk docker.mk rust-release.mk image.mk|image-build-test BIN_NAME=myapp REPO_ROOT=/r GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|make --no-print-directory image-test-myapp GIT_VERSION="v1" GIT_COMMIT="c" BUILD_DATE="d"
+rust.mk docker.mk rust-release.mk image.mk|image-test-agent-compose DOCKER_TARGETS=controller DOCKER_TARGETS+=agent DOCKER_TARGETS+=agent-compose IMAGE_NAME_agent-compose=app-ac IMAGE_BIN_agent-compose=agent REPO_ROOT=/r IMAGE_PLATFORM=linux/amd64 IMAGE_HOST_PLATFORM=linux/amd64 GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|"/r/scripts/image-test.sh" --tier "full" --image "app-ac:prebuilt-linux-amd64" --platform "linux/amd64" --binary "/r/dist/agent-linux-amd64" --expect-version "v1 c d"
+rust.mk docker.mk rust-release.mk image.mk|image-test-controller DOCKER_TARGETS=controller DOCKER_TARGETS+=agent IMAGE_NAME_controller=app-c REPO_ROOT=/r IMAGE_PLATFORM=linux/amd64 IMAGE_HOST_PLATFORM=linux/amd64 GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|"/r/scripts/image-test.sh" --tier "full" --image "app-c:prebuilt-linux-amd64" --platform "linux/amd64" --binary "/r/dist/controller-linux-amd64" --expect-version "v1 c d"
+rust.mk docker.mk rust-release.mk image.mk|image-test BIN_NAME=myapp IMAGE_PLATFORM=linux/amd64 IMAGE_HOST_PLATFORM=linux/amd64 IMAGE_TEST_FULL_EXTRA=help|if [ "full" = full ]; then make --no-print-directory help; fi
 web.mk parity.mk|demo-parity WEB_DIR=web SCENARIO=a/b|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="a/b" PARITY_DEMO_PORT="5180" PARITY_PROTO_PORT="5181" npm run parity
 web.mk parity.mk|demo-parity WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="" PARITY_DEMO_PORT="5290" PARITY_PROTO_PORT="5291" npm run parity
 web.mk parity.mk|demo-parity-accept WEB_DIR=web|echo "demo-parity-accept: REASON= is required: say why these differences are accepted" >&2; exit 2
@@ -221,6 +229,45 @@ if out=$(make --no-print-directory -n -C "$WORK" rust-release-checksums RUST_REL
 	fail=1
 else
 	echo "ok   - rust-release.mk: an empty RUST_RELEASE_BINS stops"
+fi
+
+# image.mk without docker.mk or rust-release.mk stops and names what is missing, and the full tier
+# is refused off the host's platform.
+for missing in docker.mk rust-release.mk; do
+	includes=$(for n in rust.mk docker.mk rust-release.mk; do
+		[[ $n == "$missing" ]] || printf 'include %s/.mk/%s\n' "$ROOT" "$n"
+	done)
+	cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+$includes
+include $ROOT/.mk/image.mk
+MAKEFILE
+	if out=$(make --no-print-directory -n -C "$WORK" image-test 2>&1) ||
+		! grep -q "image.mk needs $missing" <<<"$out"; then
+		echo "FAIL - image.mk: including it without $missing does not stop"
+		while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+		fail=1
+	else
+		echo "ok   - image.mk: including it without $missing stops"
+	fi
+done
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust.mk
+include $ROOT/.mk/docker.mk
+include $ROOT/.mk/rust-release.mk
+include $ROOT/.mk/image.mk
+MAKEFILE
+if out=$(make --no-print-directory -C "$WORK" image-test IMAGE_TEST_TIER=full \
+	IMAGE_HOST_PLATFORM=linux/amd64 IMAGE_PLATFORM=linux/arm64 2>&1) ||
+	! grep -q "the full tier runs on the host's platform (linux/amd64), not linux/arm64" <<<"$out"; then
+	echo "FAIL - image.mk: the full tier off the host's platform is not refused"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - image.mk: the full tier off the host's platform is refused"
 fi
 
 # web.mk's WEB_DIST_SYNC_DIR, run for real (make -n cannot see where the build writes): a fake npm

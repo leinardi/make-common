@@ -21,7 +21,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# Holds the defaults of rust.mk, rust-release.mk and web.mk to v1: the whole `make -n` output of
+# Holds the defaults of rust.mk, rust-release.mk, image.mk and web.mk to v1: the whole `make -n` output of
 # every target, in the scenarios below, must match scripts/testdata/mk-defaults.golden byte for byte. An opt-in a
 # consumer has not set must change nothing it runs. Each line ends with a `|` marker, so a
 # trailing space in a recipe is part of the comparison too.
@@ -58,6 +58,7 @@ RUSTC
 chmod +x "$WORK/bin/rustc"
 export PATH="$WORK/bin:$PATH" HOME=/home/user
 unset CARGO_HOME
+IMAGE_TARGETS="image-build-prebuilt image-test image-build-test"
 WEB_TARGETS="web-install web-update web-dev web-demo web-build web-build-demo web-test web-lint api-types build"
 
 # Scenarios, one per line: <snippets>|<variable assignments>|<targets>.
@@ -68,6 +69,7 @@ rust.mk|RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp|$RUST_TARGETS
 rust.mk|RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help CARGO_TARGET_DIR=/tmp/t BIN_NAME=myapp|$RUST_TARGETS
 rust.mk rust-release.mk||$RUST_RELEASE_TARGETS
 rust.mk rust-release.mk|RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp|$RUST_RELEASE_TARGETS
+rust.mk docker.mk rust-release.mk image.mk|IMAGE_HOST_PLATFORM=linux/amd64|$IMAGE_TARGETS
 web.mk rust.mk|WEB_DIR=web|$WEB_TARGETS
 web.mk rust.mk||$WEB_TARGETS
 web.mk rust.mk|RUST_STAMP_PREFIX=MYAPP WEB_DIR=web BIN_NAME=myapp|build
@@ -112,4 +114,4 @@ if ! diff -u "$GOLDEN" <(printf '%s\n' "$actual"); then
 	echo "FAIL - mk defaults: make -n output differs from scripts/testdata/mk-defaults.golden"
 	exit 1
 fi
-echo "ok   - mk defaults: rust.mk, rust-release.mk and web.mk run what v1 ran"
+echo "ok   - mk defaults: rust.mk, rust-release.mk, image.mk and web.mk run what v1 ran"
