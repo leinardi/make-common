@@ -67,7 +67,7 @@ RECIPES=$(
 	cat <<'EOF'
 ansible-vault.mk|vault-decrypt ENV=dev|ansible-vault decrypt \
 ansible-vault.mk|vault-decrypt ENV=dev ANSIBLE_VAULT=/opt/ansible/bin/ansible-vault|/opt/ansible/bin/ansible-vault decrypt \
-password.mk|password|env LC_ALL=C tr -dc 'A-Za-z0-9_.+=,-' < /dev/urandom | head -c 99; echo
+password.mk|password|head -c 4096 /dev/urandom | env LC_ALL=C tr -dc 'A-Za-z0-9_.+=,-' | cut -c 1-99
 go.mk|go-lint|pre-commit run "golangci-lint-full" --all-files
 go.mk|go-lint GO_LINT_HOOK=golangci-lint-repo-mod|pre-commit run "golangci-lint-repo-mod" --all-files
 web.mk|web-build WEB_DIR=web|npm --prefix "web" ci
@@ -138,7 +138,12 @@ done <<<"$RECIPES"
 
 # Run password generation too: a malformed tr range can fail while the recipe's
 # final echo still makes make succeed. Check stderr, length and allowed bytes.
-if ! out=$(make --no-print-directory -s -f "$ROOT/.mk/password.mk" password 2>"$WORK/password.err") ||
+# SIGPIPE is ignored, as on a GitHub Actions runner, where a writer whose reader
+# exits early prints "write error: Broken pipe" instead of dying quietly.
+if ! out=$(
+	trap '' PIPE
+	make --no-print-directory -s -f "$ROOT/.mk/password.mk" password 2>"$WORK/password.err"
+) ||
 	[[ -s "$WORK/password.err" ]]; then
 	echo "FAIL - password.mk: password generation failed or wrote stderr"
 	fail=1
