@@ -106,6 +106,217 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings|
 cargo test --workspace --locked|
 RUSTDOCFLAGS=" -D warnings" cargo doc --workspace --all-features --no-deps --locked|
 ### status 0
+### rust.mk rust-release.mk |  | rust-zigbuild-check
+set -eu; \|
+for tool in zig cargo-zigbuild; do \|
+  if ! command -v "$tool" >/dev/null 2>&1; then \|
+    echo "$tool is not on PATH; install the release rust-release.mk pins (make rust-zigbuild-install; CI: setup-zigbuild)" >&2; \|
+    exit 1; \|
+  fi; \|
+done; \|
+zig_version="$(zig version)"; \|
+if [ "$zig_version" != "0.17.0" ]; then \|
+  echo "zig $zig_version is on PATH; the static builds need zig 0.17.0" >&2; \|
+  exit 1; \|
+fi; \|
+zigbuild_version="$(cargo-zigbuild --version)"; \|
+if [ "$zigbuild_version" != "cargo-zigbuild 0.24.0" ]; then \|
+  echo "$zigbuild_version is on PATH; the static builds need cargo-zigbuild 0.24.0" >&2; \|
+  exit 1; \|
+fi|
+### status 0
+### rust.mk rust-release.mk |  | rust-release-binaries
+set -eu; \|
+for tool in zig cargo-zigbuild; do \|
+  if ! command -v "$tool" >/dev/null 2>&1; then \|
+    echo "$tool is not on PATH; install the release rust-release.mk pins (make rust-zigbuild-install; CI: setup-zigbuild)" >&2; \|
+    exit 1; \|
+  fi; \|
+done; \|
+zig_version="$(zig version)"; \|
+if [ "$zig_version" != "0.17.0" ]; then \|
+  echo "zig $zig_version is on PATH; the static builds need zig 0.17.0" >&2; \|
+  exit 1; \|
+fi; \|
+zigbuild_version="$(cargo-zigbuild --version)"; \|
+if [ "$zigbuild_version" != "cargo-zigbuild 0.24.0" ]; then \|
+  echo "$zigbuild_version is on PATH; the static builds need cargo-zigbuild 0.24.0" >&2; \|
+  exit 1; \|
+fi|
+mkdir -p "@WORK@/dist"|
+RUSTFLAGS="--remap-path-prefix=@WORK@=/src --remap-path-prefix=/home/user/.cargo=/cargo --remap-path-prefix=/sysroot/lib/rustlib/src/rust=/rustc/0123abcd"  cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin app|
+cp "@WORK@/target/x86_64-unknown-linux-musl/release/app" "@WORK@/dist/app-linux-amd64"|
+RUSTFLAGS="--remap-path-prefix=@WORK@=/src --remap-path-prefix=/home/user/.cargo=/cargo --remap-path-prefix=/sysroot/lib/rustlib/src/rust=/rustc/0123abcd"  cargo zigbuild --release --locked --target "aarch64-unknown-linux-musl" --bin app|
+cp "@WORK@/target/aarch64-unknown-linux-musl/release/app" "@WORK@/dist/app-linux-arm64"|
+### status 0
+### rust.mk rust-release.mk |  | rust-release-checksums
+cd "@WORK@/dist" && sha256sum "app-linux-amd64" "app-linux-arm64" > checksums.txt|
+### status 0
+### rust.mk rust-release.mk |  | rust-release-dist
+make --no-print-directory rust-release-binaries|
+set -eu; \|
+for tool in zig cargo-zigbuild; do \|
+  if ! command -v "$tool" >/dev/null 2>&1; then \|
+    echo "$tool is not on PATH; install the release rust-release.mk pins (make rust-zigbuild-install; CI: setup-zigbuild)" >&2; \|
+    exit 1; \|
+  fi; \|
+done; \|
+zig_version="$(zig version)"; \|
+if [ "$zig_version" != "0.17.0" ]; then \|
+  echo "zig $zig_version is on PATH; the static builds need zig 0.17.0" >&2; \|
+  exit 1; \|
+fi; \|
+zigbuild_version="$(cargo-zigbuild --version)"; \|
+if [ "$zigbuild_version" != "cargo-zigbuild 0.24.0" ]; then \|
+  echo "$zigbuild_version is on PATH; the static builds need cargo-zigbuild 0.24.0" >&2; \|
+  exit 1; \|
+fi|
+mkdir -p "@WORK@/dist"|
+RUSTFLAGS="--remap-path-prefix=@WORK@=/src --remap-path-prefix=/home/user/.cargo=/cargo --remap-path-prefix=/sysroot/lib/rustlib/src/rust=/rustc/0123abcd"  cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin app|
+cp "@WORK@/target/x86_64-unknown-linux-musl/release/app" "@WORK@/dist/app-linux-amd64"|
+RUSTFLAGS="--remap-path-prefix=@WORK@=/src --remap-path-prefix=/home/user/.cargo=/cargo --remap-path-prefix=/sysroot/lib/rustlib/src/rust=/rustc/0123abcd"  cargo zigbuild --release --locked --target "aarch64-unknown-linux-musl" --bin app|
+cp "@WORK@/target/aarch64-unknown-linux-musl/release/app" "@WORK@/dist/app-linux-arm64"|
+make --no-print-directory rust-release-checksums|
+cd "@WORK@/dist" && sha256sum "app-linux-amd64" "app-linux-arm64" > checksums.txt|
+### status 0
+### rust.mk rust-release.mk |  | rust-zigbuild-install
+set -eu; \|
+case "$(uname -m)" in \|
+  x86_64) zig_arch=x86_64; zig_sha256=1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026; \|
+    zigbuild_asset=x86_64-unknown-linux-musl; \|
+    zigbuild_sha256=52be2cb85ad3875682564a29bac1832b2ab3db68b1c504765c92d5249cc9b96f ;; \|
+  aarch64) zig_arch=aarch64; zig_sha256=9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8; \|
+    zigbuild_asset=aarch64-unknown-linux-gnu; \|
+    zigbuild_sha256=de42626985f428033078dfc12ac8a59ee713f8e5627235ec883b1c899bee895c ;; \|
+  *) echo "no pinned zig for $(uname -m)" >&2; exit 1 ;; \|
+esac; \|
+dir="@WORK@/target/zigbuild-tools"; \|
+if [ -e "$dir" ]; then echo "$dir already exists; install into a new directory" >&2; exit 1; fi; \|
+mkdir -p "$dir/bin" "$dir/zig" "$dir/downloads"; \|
+curl -fsSL --proto '=https' --tlsv1.2 -o "$dir/downloads/zig.tar.xz" \|
+  "https://ziglang.org/download/0.17.0/zig-$zig_arch-linux-0.17.0.tar.xz"; \|
+echo "$zig_sha256  $dir/downloads/zig.tar.xz" | sha256sum -c -; \|
+tar -xJf "$dir/downloads/zig.tar.xz" -C "$dir/zig" --strip-components=1; \|
+ln -s ../zig/zig "$dir/bin/zig"; \|
+curl -fsSL --proto '=https' --tlsv1.2 -o "$dir/downloads/cargo-zigbuild.tar.xz" \|
+  "https://github.com/rust-cross/cargo-zigbuild/releases/download/v0.24.0/cargo-zigbuild-$zigbuild_asset.tar.xz"; \|
+echo "$zigbuild_sha256  $dir/downloads/cargo-zigbuild.tar.xz" | sha256sum -c -; \|
+tar -xJf "$dir/downloads/cargo-zigbuild.tar.xz" -C "$dir/bin" --strip-components=1; \|
+"$dir/bin/zig" version; "$dir/bin/cargo-zigbuild" --version|
+### status 0
+### rust.mk rust-release.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-zigbuild-check
+set -eu; \|
+for tool in zig cargo-zigbuild; do \|
+  if ! command -v "$tool" >/dev/null 2>&1; then \|
+    echo "$tool is not on PATH; install the release rust-release.mk pins (make rust-zigbuild-install; CI: setup-zigbuild)" >&2; \|
+    exit 1; \|
+  fi; \|
+done; \|
+zig_version="$(zig version)"; \|
+if [ "$zig_version" != "0.17.0" ]; then \|
+  echo "zig $zig_version is on PATH; the static builds need zig 0.17.0" >&2; \|
+  exit 1; \|
+fi; \|
+zigbuild_version="$(cargo-zigbuild --version)"; \|
+if [ "$zigbuild_version" != "cargo-zigbuild 0.24.0" ]; then \|
+  echo "$zigbuild_version is on PATH; the static builds need cargo-zigbuild 0.24.0" >&2; \|
+  exit 1; \|
+fi|
+### status 0
+### rust.mk rust-release.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-release-binaries
+set -eu; \|
+for tool in zig cargo-zigbuild; do \|
+  if ! command -v "$tool" >/dev/null 2>&1; then \|
+    echo "$tool is not on PATH; install the release rust-release.mk pins (make rust-zigbuild-install; CI: setup-zigbuild)" >&2; \|
+    exit 1; \|
+  fi; \|
+done; \|
+zig_version="$(zig version)"; \|
+if [ "$zig_version" != "0.17.0" ]; then \|
+  echo "zig $zig_version is on PATH; the static builds need zig 0.17.0" >&2; \|
+  exit 1; \|
+fi; \|
+zigbuild_version="$(cargo-zigbuild --version)"; \|
+if [ "$zigbuild_version" != "cargo-zigbuild 0.24.0" ]; then \|
+  echo "$zigbuild_version is on PATH; the static builds need cargo-zigbuild 0.24.0" >&2; \|
+  exit 1; \|
+fi|
+mkdir -p "@WORK@/dist"|
+RUSTFLAGS="--remap-path-prefix=@WORK@=/src --remap-path-prefix=/home/user/.cargo=/cargo --remap-path-prefix=/sysroot/lib/rustlib/src/rust=/rustc/0123abcd"  MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin myapp|
+cp "@WORK@/target/x86_64-unknown-linux-musl/release/myapp" "@WORK@/dist/myapp-linux-amd64"|
+RUSTFLAGS="--remap-path-prefix=@WORK@=/src --remap-path-prefix=/home/user/.cargo=/cargo --remap-path-prefix=/sysroot/lib/rustlib/src/rust=/rustc/0123abcd"  MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo zigbuild --release --locked --target "aarch64-unknown-linux-musl" --bin myapp|
+cp "@WORK@/target/aarch64-unknown-linux-musl/release/myapp" "@WORK@/dist/myapp-linux-arm64"|
+### status 0
+### rust.mk rust-release.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-release-checksums
+cd "@WORK@/dist" && sha256sum "myapp-linux-amd64" "myapp-linux-arm64" > checksums.txt|
+### status 0
+### rust.mk rust-release.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-release-dist
+make --no-print-directory rust-release-binaries|
+set -eu; \|
+for tool in zig cargo-zigbuild; do \|
+  if ! command -v "$tool" >/dev/null 2>&1; then \|
+    echo "$tool is not on PATH; install the release rust-release.mk pins (make rust-zigbuild-install; CI: setup-zigbuild)" >&2; \|
+    exit 1; \|
+  fi; \|
+done; \|
+zig_version="$(zig version)"; \|
+if [ "$zig_version" != "0.17.0" ]; then \|
+  echo "zig $zig_version is on PATH; the static builds need zig 0.17.0" >&2; \|
+  exit 1; \|
+fi; \|
+zigbuild_version="$(cargo-zigbuild --version)"; \|
+if [ "$zigbuild_version" != "cargo-zigbuild 0.24.0" ]; then \|
+  echo "$zigbuild_version is on PATH; the static builds need cargo-zigbuild 0.24.0" >&2; \|
+  exit 1; \|
+fi|
+mkdir -p "@WORK@/dist"|
+RUSTFLAGS="--remap-path-prefix=@WORK@=/src --remap-path-prefix=/home/user/.cargo=/cargo --remap-path-prefix=/sysroot/lib/rustlib/src/rust=/rustc/0123abcd"  MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin myapp|
+cp "@WORK@/target/x86_64-unknown-linux-musl/release/myapp" "@WORK@/dist/myapp-linux-amd64"|
+RUSTFLAGS="--remap-path-prefix=@WORK@=/src --remap-path-prefix=/home/user/.cargo=/cargo --remap-path-prefix=/sysroot/lib/rustlib/src/rust=/rustc/0123abcd"  MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo zigbuild --release --locked --target "aarch64-unknown-linux-musl" --bin myapp|
+cp "@WORK@/target/aarch64-unknown-linux-musl/release/myapp" "@WORK@/dist/myapp-linux-arm64"|
+make --no-print-directory rust-release-checksums|
+cd "@WORK@/dist" && sha256sum "myapp-linux-amd64" "myapp-linux-arm64" > checksums.txt|
+### status 0
+### rust.mk rust-release.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-zigbuild-install
+set -eu; \|
+case "$(uname -m)" in \|
+  x86_64) zig_arch=x86_64; zig_sha256=1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026; \|
+    zigbuild_asset=x86_64-unknown-linux-musl; \|
+    zigbuild_sha256=52be2cb85ad3875682564a29bac1832b2ab3db68b1c504765c92d5249cc9b96f ;; \|
+  aarch64) zig_arch=aarch64; zig_sha256=9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8; \|
+    zigbuild_asset=aarch64-unknown-linux-gnu; \|
+    zigbuild_sha256=de42626985f428033078dfc12ac8a59ee713f8e5627235ec883b1c899bee895c ;; \|
+  *) echo "no pinned zig for $(uname -m)" >&2; exit 1 ;; \|
+esac; \|
+dir="@WORK@/target/zigbuild-tools"; \|
+if [ -e "$dir" ]; then echo "$dir already exists; install into a new directory" >&2; exit 1; fi; \|
+mkdir -p "$dir/bin" "$dir/zig" "$dir/downloads"; \|
+curl -fsSL --proto '=https' --tlsv1.2 -o "$dir/downloads/zig.tar.xz" \|
+  "https://ziglang.org/download/0.17.0/zig-$zig_arch-linux-0.17.0.tar.xz"; \|
+echo "$zig_sha256  $dir/downloads/zig.tar.xz" | sha256sum -c -; \|
+tar -xJf "$dir/downloads/zig.tar.xz" -C "$dir/zig" --strip-components=1; \|
+ln -s ../zig/zig "$dir/bin/zig"; \|
+curl -fsSL --proto '=https' --tlsv1.2 -o "$dir/downloads/cargo-zigbuild.tar.xz" \|
+  "https://github.com/rust-cross/cargo-zigbuild/releases/download/v0.24.0/cargo-zigbuild-$zigbuild_asset.tar.xz"; \|
+echo "$zigbuild_sha256  $dir/downloads/cargo-zigbuild.tar.xz" | sha256sum -c -; \|
+tar -xJf "$dir/downloads/cargo-zigbuild.tar.xz" -C "$dir/bin" --strip-components=1; \|
+"$dir/bin/zig" version; "$dir/bin/cargo-zigbuild" --version|
+### status 0
+### rust.mk docker.mk rust-release.mk image.mk | IMAGE_HOST_PLATFORM=linux/amd64 | image-build-prebuilt
+docker buildx build --load --platform "linux/amd64" --target prebuilt --build-context dist="@WORK@/dist" -f "deployments/docker/Dockerfile" -t "app:prebuilt-linux-amd64" --build-arg VERSION="v1.2.3" --build-arg COMMIT="abc123" --build-arg DATE="2026-01-02T03:04:05Z" "."|
+### status 0
+### rust.mk docker.mk rust-release.mk image.mk | IMAGE_HOST_PLATFORM=linux/amd64 | image-test
+if [ "full" = full ] && [ "linux/amd64" != "linux/amd64" ]; then echo "the full tier runs on the host's platform (linux/amd64), not linux/amd64" >&2; exit 1; fi|
+"@WORK@/scripts/image-test.sh" --tier "full" --image "app:prebuilt-linux-amd64" --platform "linux/amd64" --binary "@WORK@/dist/app-linux-amd64" --expect-version "v1.2.3 abc123 2026-01-02T03:04:05Z"|
+### status 0
+### rust.mk docker.mk rust-release.mk image.mk | IMAGE_HOST_PLATFORM=linux/amd64 | image-build-test
+if [ "full" = full ] && [ "linux/amd64" != "linux/amd64" ]; then echo "the full tier runs on the host's platform (linux/amd64), not linux/amd64" >&2; exit 1; fi|
+make --no-print-directory image-build-prebuilt-app GIT_VERSION="v1.2.3" GIT_COMMIT="abc123" BUILD_DATE="2026-01-02T03:04:05Z"|
+docker buildx build --load --platform "linux/amd64" --target prebuilt --build-context dist="@WORK@/dist" -f "deployments/docker/Dockerfile" -t "app:prebuilt-linux-amd64" --build-arg VERSION="v1.2.3" --build-arg COMMIT="abc123" --build-arg DATE="2026-01-02T03:04:05Z" "."|
+make --no-print-directory image-test-app GIT_VERSION="v1.2.3" GIT_COMMIT="abc123" BUILD_DATE="2026-01-02T03:04:05Z"|
+if [ "full" = full ] && [ "linux/amd64" != "linux/amd64" ]; then echo "the full tier runs on the host's platform (linux/amd64), not linux/amd64" >&2; exit 1; fi|
+"@WORK@/scripts/image-test.sh" --tier "full" --image "app:prebuilt-linux-amd64" --platform "linux/amd64" --binary "@WORK@/dist/app-linux-amd64" --expect-version "v1.2.3 abc123 2026-01-02T03:04:05Z"|
+### status 0
 ### web.mk rust.mk | WEB_DIR=web | web-install
 npm --prefix "web" ci|
 ### status 0

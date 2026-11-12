@@ -29,17 +29,30 @@
 # it parses.
 
 set -euo pipefail
+# A developer's cargo directories would steer the fake cargo and the metadata read.
+unset CARGO_TARGET_DIR CARGO_BUILD_TARGET_DIR CARGO_BUILD_BUILD_DIR
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
+# The snippets a snippet needs included before it, as a consumer lists them.
+needs() {
+	case $1 in
+	rust-release.mk) echo rust.mk ;;
+	image.mk) echo rust.mk docker.mk rust-release.mk ;;
+	*) ;;
+	esac
+}
+
 fail=0
 for mk in "$ROOT"/.mk/*.mk; do
 	name=$(basename "$mk")
+	needed=$(for n in $(needs "$name"); do printf 'include %s/.mk/%s\n' "$ROOT" "$n"; done)
 	cat >"$WORK/Makefile" <<MAKEFILE
 REPO_ROOT := $WORK
 include $ROOT/.mk/help.mk
+$needed
 include $mk
 include $mk
 MAKEFILE
@@ -93,6 +106,22 @@ rust.mk|rust-clean-stale RUST_SWEEP_DAYS=30|cargo sweep --time "30"
 rust.mk|rust-clean-stale|cargo sweep --installed
 web.mk|web-build WEB_DIR=web WEB_DIST_SYNC_DIR=web/dist|npm --prefix "web" run build -- --outDir ".dist-staging" --emptyOutDir && rsync -r --checksum --delete "web/.dist-staging/" "web/dist/"
 web.mk|build WEB_DIR=web|echo "build: set WEB_BUILD_NEXT to the target that builds the binary embedding the web app" >&2; exit 2
+rust.mk rust-release.mk|rust-release-binaries BIN_NAME=myapp REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_RELEASE_TARGET_DIR=/r/target|RUSTFLAGS="F"  cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin myapp
+rust.mk rust-release.mk|rust-release-binaries BIN_NAME=myapp REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_RELEASE_TARGET_DIR=/r/target|cp "/r/target/aarch64-unknown-linux-musl/release/myapp" "/r/dist/myapp-linux-arm64"
+rust.mk rust-release.mk|rust-release-binaries BIN_NAME=myapp REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_RELEASE_TARGET_DIR=/tmp/t|cp "/tmp/t/aarch64-unknown-linux-musl/release/myapp" "/r/dist/myapp-linux-arm64"
+rust.mk rust-release.mk|rust-release-checksums BIN_NAME=myapp REPO_ROOT=/r|cd "/r/dist" && sha256sum "myapp-linux-amd64" "myapp-linux-arm64" > checksums.txt
+rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent RUST_RELEASE_PLATFORMS=linux/amd64 REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_STAMP_PREFIX=APP GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d RUST_RELEASE_TARGET_DIR=/r/target|RUSTFLAGS="F"  APP_VERSION="v1" APP_COMMIT="c" APP_DATE="d" cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin controller --bin agent
+rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent RUST_RELEASE_PLATFORMS=linux/amd64 REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_RELEASE_TARGET_DIR=/r/target|cp "/r/target/x86_64-unknown-linux-musl/release/controller" "/r/dist/controller-linux-amd64"
+rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent RUST_RELEASE_PLATFORMS=linux/amd64 REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_RELEASE_TARGET_DIR=/r/target|cp "/r/target/x86_64-unknown-linux-musl/release/agent" "/r/dist/agent-linux-amd64"
+rust.mk rust-release.mk|rust-release-checksums RUST_RELEASE_BINS=controller RUST_RELEASE_BINS+=agent REPO_ROOT=/r|cd "/r/dist" && sha256sum "controller-linux-amd64" "controller-linux-arm64" "agent-linux-amd64" "agent-linux-arm64" > checksums.txt
+rust.mk rust-release.mk|rust-release-binaries RUST_RELEASE_PREREQS=rust-fmt REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_RELEASE_TARGET_DIR=/r/target|cargo fmt --all
+rust.mk docker.mk rust-release.mk image.mk|image-build-prebuilt BIN_NAME=myapp REPO_ROOT=/r IMAGE_PLATFORM=linux/arm64 GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|docker buildx build --load --platform "linux/arm64" --target prebuilt --build-context dist="/r/dist" -f "deployments/docker/Dockerfile" -t "myapp:prebuilt-linux-arm64" --build-arg VERSION="v1" --build-arg COMMIT="c" --build-arg DATE="d" "."
+rust.mk docker.mk rust-release.mk image.mk|image-test BIN_NAME=myapp REPO_ROOT=/r IMAGE_PLATFORM=linux/arm64 IMAGE_TEST_TIER=reduced GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|"/r/scripts/image-test.sh" --tier "reduced" --image "myapp:prebuilt-linux-arm64" --platform "linux/arm64" --binary "/r/dist/myapp-linux-arm64" --expect-version "v1 c d"
+rust.mk docker.mk rust-release.mk image.mk|image-build-test BIN_NAME=myapp REPO_ROOT=/r GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|make --no-print-directory image-build-prebuilt-myapp GIT_VERSION="v1" GIT_COMMIT="c" BUILD_DATE="d"
+rust.mk docker.mk rust-release.mk image.mk|image-build-test BIN_NAME=myapp REPO_ROOT=/r GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|make --no-print-directory image-test-myapp GIT_VERSION="v1" GIT_COMMIT="c" BUILD_DATE="d"
+rust.mk docker.mk rust-release.mk image.mk|image-test-agent-compose DOCKER_TARGETS=controller DOCKER_TARGETS+=agent DOCKER_TARGETS+=agent-compose IMAGE_NAME_agent-compose=app-ac IMAGE_BIN_agent-compose=agent REPO_ROOT=/r IMAGE_PLATFORM=linux/amd64 IMAGE_HOST_PLATFORM=linux/amd64 GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|"/r/scripts/image-test.sh" --tier "full" --image "app-ac:prebuilt-linux-amd64" --platform "linux/amd64" --binary "/r/dist/agent-linux-amd64" --expect-version "v1 c d"
+rust.mk docker.mk rust-release.mk image.mk|image-test-controller DOCKER_TARGETS=controller DOCKER_TARGETS+=agent IMAGE_NAME_controller=app-c REPO_ROOT=/r IMAGE_PLATFORM=linux/amd64 IMAGE_HOST_PLATFORM=linux/amd64 GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|"/r/scripts/image-test.sh" --tier "full" --image "app-c:prebuilt-linux-amd64" --platform "linux/amd64" --binary "/r/dist/controller-linux-amd64" --expect-version "v1 c d"
+rust.mk docker.mk rust-release.mk image.mk|image-test BIN_NAME=myapp IMAGE_PLATFORM=linux/amd64 IMAGE_HOST_PLATFORM=linux/amd64 IMAGE_TEST_FULL_EXTRA=help|if [ "full" = full ]; then make --no-print-directory help; fi
 web.mk parity.mk|demo-parity WEB_DIR=web SCENARIO=a/b|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="a/b" PARITY_DEMO_PORT="5180" PARITY_PROTO_PORT="5181" npm run parity
 web.mk parity.mk|demo-parity WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|cd "web" && PARITY_MATRIX="" PARITY_SCENARIOS="" PARITY_DEMO_PORT="5290" PARITY_PROTO_PORT="5291" npm run parity
 web.mk parity.mk|demo-parity-accept WEB_DIR=web|echo "demo-parity-accept: REASON= is required: say why these differences are accepted" >&2; exit 2
@@ -173,6 +202,77 @@ else
 	echo "ok   - parity.mk: a parity goal without web.mk stops"
 fi
 
+# rust-release.mk without rust.mk: make stops at the include and names rust.mk, rather than
+# building with an empty CARGO and BIN_NAME.
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust-release.mk
+MAKEFILE
+if out=$(make --no-print-directory -n -C "$WORK" rust-release-binaries 2>&1) ||
+	! grep -q 'rust-release.mk needs rust.mk' <<<"$out"; then
+	echo "FAIL - rust-release.mk: including it without rust.mk does not stop"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust-release.mk: including it without rust.mk stops"
+fi
+
+# An empty RUST_RELEASE_BINS stops make, rather than checksumming stdin.
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust.mk
+include $ROOT/.mk/rust-release.mk
+MAKEFILE
+if out=$(make --no-print-directory -n -C "$WORK" rust-release-checksums RUST_RELEASE_BINS= 2>&1) ||
+	! grep -q 'RUST_RELEASE_BINS is empty' <<<"$out"; then
+	echo "FAIL - rust-release.mk: an empty RUST_RELEASE_BINS does not stop"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust-release.mk: an empty RUST_RELEASE_BINS stops"
+fi
+
+# image.mk without docker.mk or rust-release.mk stops and names what is missing, and the full tier
+# is refused off the host's platform.
+for missing in docker.mk rust-release.mk; do
+	includes=$(for n in rust.mk docker.mk rust-release.mk; do
+		[[ $n == "$missing" ]] || printf 'include %s/.mk/%s\n' "$ROOT" "$n"
+	done)
+	cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+$includes
+include $ROOT/.mk/image.mk
+MAKEFILE
+	if out=$(make --no-print-directory -n -C "$WORK" image-test 2>&1) ||
+		! grep -q "image.mk needs $missing" <<<"$out"; then
+		echo "FAIL - image.mk: including it without $missing does not stop"
+		while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+		fail=1
+	else
+		echo "ok   - image.mk: including it without $missing stops"
+	fi
+done
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust.mk
+include $ROOT/.mk/docker.mk
+include $ROOT/.mk/rust-release.mk
+include $ROOT/.mk/image.mk
+MAKEFILE
+if out=$(make --no-print-directory -C "$WORK" image-test IMAGE_TEST_TIER=full \
+	IMAGE_HOST_PLATFORM=linux/amd64 IMAGE_PLATFORM=linux/arm64 2>&1) ||
+	! grep -q "the full tier runs on the host's platform (linux/amd64), not linux/arm64" <<<"$out"; then
+	echo "FAIL - image.mk: the full tier off the host's platform is not refused"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - image.mk: the full tier off the host's platform is refused"
+fi
+
 # web.mk's WEB_DIST_SYNC_DIR, run for real (make -n cannot see where the build writes): a fake npm
 # that, like npm and vite, resolves the build's --outDir against --prefix. A second build of the
 # same app leaves the synced files' modification times alone, a changed file is updated, a file the
@@ -193,6 +293,116 @@ mkdir -p "$out"
 cp -R "$APP_SRC/." "$out/"
 NPM
 chmod +x "$WORK/bin/npm"
+
+# rust-release.mk asks cargo where it writes (cargo metadata's target_directory and
+# build_directory), so a CARGO_TARGET_DIR, a build.target-dir or a build.build-dir is copied from
+# or remapped, not <repo>/target: a fake cargo answers the metadata as cargo does, from
+# CARGO_TARGET_DIR when it has one, and logs each call. A directory outside the checkout is
+# remapped to /src/target after the fixed remaps, which come again after it when inside it (rustc
+# applies the last match), and so is another one inside the checkout; the checkout's target/ is
+# not (it is /src/target already). An older cargo without build_directory stands for both; a
+# cargo that cannot answer stops make.
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust.mk
+include $ROOT/.mk/rust-release.mk
+MAKEFILE
+cat >"$WORK/bin/cargo" <<'CARGO'
+#!/usr/bin/env bash
+[[ "$1 $2 $3 $4" == "metadata --format-version 1 --no-deps" ]] || exit 2
+echo call >>"$CARGO_CALLS"
+target=${CARGO_TARGET_DIR:-$FAKE_TARGET_DIR}
+printf '{"packages":[],"target_directory":"%s",%s"version":1,"workspace_root":"/w","metadata":%s}\n' \
+	"$target" "${FAKE_BUILD_DIR:+\"build_directory\":\"$FAKE_BUILD_DIR\",}" "${FAKE_METADATA:-null}"
+CARGO
+chmod +x "$WORK/bin/cargo"
+export CARGO_CALLS="$WORK/cargo-calls"
+# release_dry_run <target directory> <build directory, empty for none> [make arguments...]
+release_dry_run() {
+	local target=$1 build=$2
+	shift 2
+	: >"$CARGO_CALLS"
+	FAKE_TARGET_DIR=$target FAKE_BUILD_DIR=$build make --no-print-directory -n -C "$WORK" \
+		rust-release-binaries BIN_NAME=myapp RUST_RELEASE_PLATFORMS=linux/amd64 \
+		CARGO="$WORK/bin/cargo" RUST_RELEASE_RUST_SRC=/rs RUST_RELEASE_RUSTC_HASH=h \
+		CARGO_HOME=/ch "$@" 2>&1
+}
+# release_check <description> <output> <fixed strings the output holds...>, with !<string> for
+# one it must not hold.
+release_check() {
+	local description=$1 output=$2 expected
+	shift 2
+	for expected in "$@"; do
+		local held=0
+		grep -qF -- "${expected#!}" <<<"$output" && held=1
+		if { [[ $expected == !* ]] && ((held)); } || { [[ $expected != !* ]] && ((!held)); }; then
+			echo "FAIL - rust-release.mk: $description ($expected)"
+			while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$output"
+			fail=1
+			return
+		fi
+	done
+	echo "ok   - rust-release.mk: $description"
+}
+cp_from='cp "%s/x86_64-unknown-linux-musl/release/myapp"'
+fixed="--remap-path-prefix=$WORK=/src --remap-path-prefix=/ch=/cargo --remap-path-prefix=/rs=/rustc/h"
+out=$(release_dry_run /custom/t "") || true
+# shellcheck disable=SC2059 # cp_from is the format
+release_check "the copy and the remap follow cargo's target directory" "$out" \
+	"$(printf "$cp_from" /custom/t)" "$fixed --remap-path-prefix=/custom/t=/src/target\"" \
+	"!=/target "
+release_check "cargo is asked once per run" "calls=$(wc -l <"$CARGO_CALLS" | tr -d ' ');" "calls=1;"
+out=$(release_dry_run "$WORK/target" "$WORK/target") || true
+# shellcheck disable=SC2059 # cp_from is the format
+release_check "a target directory inside the checkout keeps the /src remap alone" "$out" \
+	"$(printf "$cp_from" "$WORK/target")" "$fixed\"" "!=/src/target"
+out=$(release_dry_run "$WORK/target/" "$WORK/target/") || true
+release_check "the checkout's target/ with a trailing slash keeps the /src remap alone" "$out" \
+	"$fixed\"" "!=/src/target"
+out=$(release_dry_run "$WORK/build" "$WORK/build") || true
+# shellcheck disable=SC2059 # cp_from is the format
+release_check "another target directory inside the checkout is remapped to /src/target" "$out" \
+	"$(printf "$cp_from" "$WORK/build")" "$fixed --remap-path-prefix=$WORK/build=/src/target\""
+out=$(release_dry_run "$WORK/target" /b) || true
+# shellcheck disable=SC2059 # cp_from is the format
+release_check "a build directory outside the checkout is remapped" "$out" \
+	"$(printf "$cp_from" "$WORK/target")" "$fixed --remap-path-prefix=/b=/src/target\"" \
+	"!--remap-path-prefix=$WORK/target"
+out=$(release_dry_run /ch/build/target /ch/build) || true
+release_check "a build directory in the cargo home, and a target directory in it, win" "$out" \
+	"$fixed --remap-path-prefix=/ch/build=/src/target --remap-path-prefix=/ch/build/target=/src/target\""
+out=$(release_dry_run "${WORK%/*}" "${WORK%/*}") || true
+release_check "a checkout inside the target directory stays /src" "$out" \
+	"$fixed --remap-path-prefix=${WORK%/*}=/src/target --remap-path-prefix=$WORK=/src\""
+out=$(FAKE_METADATA='{"target_directory":"/m","build_directory":"/m"}' release_dry_run /custom/t /b) || true
+# shellcheck disable=SC2059 # cp_from is the format
+release_check "workspace metadata keys of the same name are not read" "$out" \
+	"$(printf "$cp_from" /custom/t)" "--remap-path-prefix=/b=/src/target" "!/m="
+out=$(release_dry_run /custom/t "" RUST_RELEASE_TARGET_DIR="/a b") || true
+release_check "a target directory set with a space stops" "$out" \
+	"a target or build directory with a space cannot be remapped"
+out=$(release_dry_run /h/ "" CARGO_HOME=/h/c) || true
+release_check "a trailing slash on a directory holding the cargo home keeps the /cargo remap last" \
+	"$out" "--remap-path-prefix=/h=/src/target --remap-path-prefix=/h/c=/cargo\""
+out=$(release_dry_run "/a b" "") || true
+release_check "a target directory with a space stops" "$out" \
+	"cannot read cargo's target directory; set RUST_RELEASE_TARGET_DIR"
+# make 4.4 and later give $(shell) the command line's variables by themselves, so this passes
+# there without the variables passed by name; make 4.3 (ubuntu-latest, Debian 12) needs them.
+out=$(release_dry_run /custom/t /custom/t CARGO_TARGET_DIR=/cli/t) || true
+# shellcheck disable=SC2059 # cp_from is the format
+release_check "a CARGO_TARGET_DIR on make's command line reaches cargo" "$out" \
+	"$(printf "$cp_from" /cli/t)" "--remap-path-prefix=/cli/t=/src/target"
+if out=$(make --no-print-directory -n -C "$WORK" rust-release-binaries BIN_NAME=myapp \
+	RUST_RELEASE_PLATFORMS=linux/amd64 CARGO=false 2>&1) ||
+	! grep -q "cannot read cargo's target directory; set RUST_RELEASE_TARGET_DIR" <<<"$out"; then
+	echo "FAIL - rust-release.mk: a cargo that cannot report its target directory does not stop"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust-release.mk: a cargo that cannot report its target directory stops"
+fi
 
 # A file's modification time in seconds: GNU stat, else BSD/macOS stat.
 mtime() {

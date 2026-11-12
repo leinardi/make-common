@@ -29,7 +29,7 @@ itself like a consumer.
 | `scripts/bootstrap-mk-common.sh` | the bootstrap consumers copy once; it updates itself from the pinned tag |
 | `Makefile.sample` | the canonical consumer `Makefile` (`MK_COMMON_FILES` / `MK_LOCAL_FILES` split) |
 | `scripts/test-mk.sh`, `scripts/test-bootstrap.sh` | the tests behind `make test`: snippet smoke test and the `RECIPES` dry-runs, bootstrap with a fake `git`/`curl` |
-| `scripts/test-mk-defaults.sh`, `scripts/testdata/mk-defaults.golden` | the whole `make -n` output of `rust.mk` and `web.mk` with no opt-in set, compared byte for byte; `--update` rewrites it, only for an intended change of a default (a `v2`) |
+| `scripts/test-mk-defaults.sh`, `scripts/testdata/mk-defaults.golden` | the whole `make -n` output of `rust.mk`, `rust-release.mk`, `image.mk` and `web.mk` with no opt-in set, compared byte for byte; `--update` rewrites it, only for an intended change of a default (a `v2`) |
 | `scripts/check-license-headers.sh`, `scripts/test-license-headers.sh` | the MIT header check (a pre-commit hook) and its offline test |
 | `.github/workflows/ci.yaml` | `pre-commit-all` and `mk-smoke` gate, the reviewdog jobs annotate pull requests, `ci-result` is the one required check |
 
