@@ -139,6 +139,21 @@ EOF
 mkdir -p "$WORK/web"
 touch "$WORK/web/package.json" "$WORK/web/package-lock.json"
 
+# rust.mk and rust-release.mk ask cargo where it writes (cargo metadata's target_directory and
+# build_directory): a fake cargo answers as cargo does, from CARGO_TARGET_DIR when it has one, else
+# from FAKE_TARGET_DIR (the recipes below: the relative target/), and logs each call.
+mkdir -p "$WORK/bin"
+cat >"$WORK/bin/cargo" <<'CARGO'
+#!/usr/bin/env bash
+[[ "$1 $2 $3 $4" == "metadata --format-version 1 --no-deps" ]] || exit 2
+echo call >>"$CARGO_CALLS"
+target=${CARGO_TARGET_DIR:-$FAKE_TARGET_DIR}
+printf '{"packages":[],"target_directory":"%s",%s"version":1,"workspace_root":"/w","metadata":%s}\n' \
+	"$target" "${FAKE_BUILD_DIR:+\"build_directory\":\"$FAKE_BUILD_DIR\",}" "${FAKE_METADATA:-null}"
+CARGO
+chmod +x "$WORK/bin/cargo"
+export CARGO_CALLS="$WORK/cargo-calls"
+
 while IFS='|' read -r name args expected; do
 	# Word splitting of $name is intended: it lists the snippets to include.
 	# shellcheck disable=SC2086
@@ -150,7 +165,8 @@ $includes
 MAKEFILE
 	# Word splitting of $args is intended: it holds a target and variable assignments.
 	# shellcheck disable=SC2086
-	if ! out=$(make --no-print-directory -n -C "$WORK" $args 2>&1); then
+	if ! out=$(PATH="$WORK/bin:$PATH" FAKE_TARGET_DIR=target CARGO_CALLS=/dev/null \
+		make --no-print-directory -n -C "$WORK" $args 2>&1); then
 		echo "FAIL - $name: make -n $args failed"
 		while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
 		fail=1
@@ -272,13 +288,22 @@ if out=$(make --no-print-directory -C "$WORK" image-test IMAGE_TEST_TIER=full \
 else
 	echo "ok   - image.mk: the full tier off the host's platform is refused"
 fi
+for target in image-build-prebuilt image-test image-build-test; do
+	if out=$(make --no-print-directory -C "$WORK" "$target" DOCKER_TARGETS= 2>&1) ||
+		! grep -q "DOCKER_TARGETS is empty; image gates require an image" <<<"$out"; then
+		echo "FAIL - image.mk: $target with an empty DOCKER_TARGETS does not stop"
+		while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+		fail=1
+	else
+		echo "ok   - image.mk: $target with an empty DOCKER_TARGETS stops"
+	fi
+done
 
 # web.mk's WEB_DIST_SYNC_DIR, run for real (make -n cannot see where the build writes): a fake npm
 # that, like npm and vite, resolves the build's --outDir against --prefix. A second build of the
 # same app leaves the synced files' modification times alone, a changed file is updated, a file the
 # build no longer makes is deleted, and nothing lands under WEB_DIR/WEB_DIR. Once with WEB_DIR
 # relative to the consumer's directory and once absolute.
-mkdir -p "$WORK/bin"
 cat >"$WORK/bin/npm" <<'NPM'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -296,28 +321,17 @@ chmod +x "$WORK/bin/npm"
 
 # rust-release.mk asks cargo where it writes (cargo metadata's target_directory and
 # build_directory), so a CARGO_TARGET_DIR, a build.target-dir or a build.build-dir is copied from
-# or remapped, not <repo>/target: a fake cargo answers the metadata as cargo does, from
-# CARGO_TARGET_DIR when it has one, and logs each call. A directory outside the checkout is
-# remapped to /src/target after the fixed remaps, which come again after it when inside it (rustc
-# applies the last match), and so is another one inside the checkout; the checkout's target/ is
-# not (it is /src/target already). An older cargo without build_directory stands for both; a
-# cargo that cannot answer stops make.
+# or remapped, not <repo>/target: the fake cargo above answers the metadata. A directory outside
+# the checkout is remapped to /src/target after the fixed remaps, which come again after it when
+# inside it (rustc applies the last match), and so is another one inside the checkout; the
+# checkout's target/ is not (it is /src/target already). An older cargo without build_directory
+# stands for both; a cargo that cannot answer stops make.
 cat >"$WORK/Makefile" <<MAKEFILE
 REPO_ROOT := $WORK
 include $ROOT/.mk/help.mk
 include $ROOT/.mk/rust.mk
 include $ROOT/.mk/rust-release.mk
 MAKEFILE
-cat >"$WORK/bin/cargo" <<'CARGO'
-#!/usr/bin/env bash
-[[ "$1 $2 $3 $4" == "metadata --format-version 1 --no-deps" ]] || exit 2
-echo call >>"$CARGO_CALLS"
-target=${CARGO_TARGET_DIR:-$FAKE_TARGET_DIR}
-printf '{"packages":[],"target_directory":"%s",%s"version":1,"workspace_root":"/w","metadata":%s}\n' \
-	"$target" "${FAKE_BUILD_DIR:+\"build_directory\":\"$FAKE_BUILD_DIR\",}" "${FAKE_METADATA:-null}"
-CARGO
-chmod +x "$WORK/bin/cargo"
-export CARGO_CALLS="$WORK/cargo-calls"
 # release_dry_run <target directory> <build directory, empty for none> [make arguments...]
 release_dry_run() {
 	local target=$1 build=$2
@@ -404,6 +418,47 @@ else
 	echo "ok   - rust-release.mk: a cargo that cannot report its target directory stops"
 fi
 
+# rust.mk's rust-dist copies from cargo's target directory (a build.target-dir that only cargo
+# knows), asks cargo once for two expansions, and stops when cargo cannot report it rather than
+# copying from target/.
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust.mk
+again: rust-dist
+	cp "\$(RUST_TARGET_DIR)/again" /dev/null
+MAKEFILE
+: >"$CARGO_CALLS"
+out=$(FAKE_TARGET_DIR=/custom/t make --no-print-directory -n -C "$WORK" again BIN_NAME=myapp \
+	CARGO="$WORK/bin/cargo" 2>&1) || true
+if [[ $out != *'cp "/custom/t/release/myapp" "dist/myapp"'* ]]; then
+	echo "FAIL - rust.mk: rust-dist does not copy from cargo's target directory"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+elif [[ $(wc -l <"$CARGO_CALLS" | tr -d ' ') != 1 ]]; then
+	echo "FAIL - rust.mk: rust-dist asks cargo more than once"
+	fail=1
+else
+	echo "ok   - rust.mk: rust-dist copies from cargo's target directory, asking cargo once"
+fi
+out=$(FAKE_TARGET_DIR=/custom/t make --no-print-directory -n -C "$WORK" rust-dist BIN_NAME=myapp \
+	CARGO="$WORK/bin/cargo" RUST_TARGET_DIR=/set 2>&1) || true
+if [[ $out != *'cp "/set/release/myapp" "dist/myapp"'* ]]; then
+	echo "FAIL - rust.mk: a RUST_TARGET_DIR the consumer sets is not used"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust.mk: a RUST_TARGET_DIR the consumer sets is used"
+fi
+if out=$(make --no-print-directory -n -C "$WORK" rust-dist BIN_NAME=myapp CARGO=false 2>&1) ||
+	! grep -q "cannot read cargo's target directory (run cargo metadata to see why); set RUST_TARGET_DIR" <<<"$out"; then
+	echo "FAIL - rust.mk: a cargo that cannot report its target directory does not stop rust-dist"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust.mk: a cargo that cannot report its target directory stops rust-dist"
+fi
+
 # A file's modification time in seconds: GNU stat, else BSD/macOS stat.
 mtime() {
 	stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"
@@ -414,6 +469,47 @@ sync_case() {
 	mkdir -p "$consumer/web/node_modules" "$consumer/src"
 	touch "$consumer/web/package.json" "$consumer/web/package-lock.json"
 	touch "$consumer/web/node_modules/.package-lock.json"
+# rust.mk's rust-dist copies from cargo's target directory (a build.target-dir that only cargo
+# knows), asks cargo once for two expansions, and stops when cargo cannot report it rather than
+# copying from target/.
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust.mk
+again: rust-dist
+	cp "\$(RUST_TARGET_DIR)/again" /dev/null
+MAKEFILE
+: >"$CARGO_CALLS"
+out=$(FAKE_TARGET_DIR=/custom/t make --no-print-directory -n -C "$WORK" again BIN_NAME=myapp \
+	CARGO="$WORK/bin/cargo" 2>&1) || true
+if [[ $out != *'cp "/custom/t/release/myapp" "dist/myapp"'* ]]; then
+	echo "FAIL - rust.mk: rust-dist does not copy from cargo's target directory"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+elif [[ $(wc -l <"$CARGO_CALLS" | tr -d ' ') != 1 ]]; then
+	echo "FAIL - rust.mk: rust-dist asks cargo more than once"
+	fail=1
+else
+	echo "ok   - rust.mk: rust-dist copies from cargo's target directory, asking cargo once"
+fi
+out=$(FAKE_TARGET_DIR=/custom/t make --no-print-directory -n -C "$WORK" rust-dist BIN_NAME=myapp \
+	CARGO="$WORK/bin/cargo" RUST_TARGET_DIR=/set 2>&1) || true
+if [[ $out != *'cp "/set/release/myapp" "dist/myapp"'* ]]; then
+	echo "FAIL - rust.mk: a RUST_TARGET_DIR the consumer sets is not used"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust.mk: a RUST_TARGET_DIR the consumer sets is used"
+fi
+if out=$(make --no-print-directory -n -C "$WORK" rust-dist BIN_NAME=myapp CARGO=false 2>&1) ||
+	! grep -q "cannot read cargo's target directory (run cargo metadata to see why); set RUST_TARGET_DIR" <<<"$out"; then
+	echo "FAIL - rust.mk: a cargo that cannot report its target directory does not stop rust-dist"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust.mk: a cargo that cannot report its target directory stops rust-dist"
+fi
+
 	printf 'one\n' >"$consumer/src/index.html"
 	printf 'two\n' >"$consumer/src/app.js"
 	printf 'gone\n' >"$consumer/src/old.js"
