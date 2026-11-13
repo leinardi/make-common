@@ -4,7 +4,7 @@ cargo build --workspace --all-targets --all-features --locked|
 ### rust.mk |  | rust-dist
 cargo build --release --locked --bin "app"|
 mkdir -p "dist"|
-cp "target/release/app" "dist/app"|
+cp "@WORK@/target/release/app" "dist/app"|
 ### status 0
 ### rust.mk |  | rust-run
 cargo run --locked  -- |
@@ -40,7 +40,7 @@ MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" c
 ### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-dist
 MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --release --locked --bin "myapp"|
 mkdir -p "dist"|
-cp "target/release/myapp" "dist/myapp"|
+cp "@WORK@/target/release/myapp" "dist/myapp"|
 ### status 0
 ### rust.mk | RUST_STAMP_PREFIX=MYAPP BIN_NAME=myapp | rust-run
 MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo run --locked  -- |
@@ -366,7 +366,7 @@ npm --prefix "web" run build|
 make rust-dist|
 cargo build --release --locked --bin "app"|
 mkdir -p "dist"|
-cp "target/release/app" "dist/app"|
+cp "@WORK@/target/release/app" "dist/app"|
 ### status 0
 ### web.mk rust.mk |  | web-install
 npm --prefix "@WORK@/web" ci|
@@ -417,7 +417,7 @@ npm --prefix "@WORK@/web" run build|
 make rust-dist|
 cargo build --release --locked --bin "app"|
 mkdir -p "dist"|
-cp "target/release/app" "dist/app"|
+cp "@WORK@/target/release/app" "dist/app"|
 ### status 0
 ### web.mk rust.mk | RUST_STAMP_PREFIX=MYAPP WEB_DIR=web BIN_NAME=myapp | build
 npm --prefix "web" ci|
@@ -426,5 +426,5 @@ npm --prefix "web" run build|
 make rust-dist|
 MYAPP_VERSION="v1.2.3" MYAPP_COMMIT="abc123" MYAPP_DATE="2026-01-02T03:04:05Z" cargo build --release --locked --bin "myapp"|
 mkdir -p "dist"|
-cp "target/release/myapp" "dist/myapp"|
+cp "@WORK@/target/release/myapp" "dist/myapp"|
 ### status 0

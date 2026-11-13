@@ -60,7 +60,7 @@ chmod +x "$WORK/bin/rustc"
 cat >"$WORK/bin/cargo" <<CARGO
 #!/usr/bin/env bash
 [[ "\$*" == "metadata --format-version 1 --no-deps" ]] || exit 2
-printf '{"packages":[],"target_directory":"%s","version":1,"workspace_root":"%s"}\\n' "$WORK/target" "$WORK"
+printf '{"packages":[],"target_directory":"%s","version":1,"workspace_root":"%s"}\\n' "\${CARGO_TARGET_DIR:-$WORK/target}" "$WORK"
 CARGO
 chmod +x "$WORK/bin/cargo"
 export PATH="$WORK/bin:$PATH" HOME=/home/user
