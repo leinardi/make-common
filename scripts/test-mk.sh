@@ -288,6 +288,16 @@ if out=$(make --no-print-directory -C "$WORK" image-test IMAGE_TEST_TIER=full \
 else
 	echo "ok   - image.mk: the full tier off the host's platform is refused"
 fi
+for target in image-build-prebuilt image-test image-build-test; do
+	if out=$(make --no-print-directory -C "$WORK" "$target" DOCKER_TARGETS= 2>&1) ||
+		! grep -q "DOCKER_TARGETS is empty; image gates require an image" <<<"$out"; then
+		echo "FAIL - image.mk: $target with an empty DOCKER_TARGETS does not stop"
+		while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+		fail=1
+	else
+		echo "ok   - image.mk: $target with an empty DOCKER_TARGETS stops"
+	fi
+done
 
 # web.mk's WEB_DIST_SYNC_DIR, run for real (make -n cannot see where the build writes): a fake npm
 # that, like npm and vite, resolves the build's --outDir against --prefix. A second build of the

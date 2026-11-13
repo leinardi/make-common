@@ -304,10 +304,12 @@ tar -xJf "$dir/downloads/cargo-zigbuild.tar.xz" -C "$dir/bin" --strip-components
 ### status 0
 ### rust.mk docker.mk rust-release.mk image.mk | IMAGE_HOST_PLATFORM=linux/amd64 | image-build-prebuilt
 docker buildx build --load --platform "linux/amd64" --target prebuilt --build-context dist="@WORK@/dist" -f "deployments/docker/Dockerfile" -t "app:prebuilt-linux-amd64" --build-arg VERSION="v1.2.3" --build-arg COMMIT="abc123" --build-arg DATE="2026-01-02T03:04:05Z" "."|
+test -n "app" || { echo "DOCKER_TARGETS is empty; image gates require an image" >&2; exit 1; }|
 ### status 0
 ### rust.mk docker.mk rust-release.mk image.mk | IMAGE_HOST_PLATFORM=linux/amd64 | image-test
 if [ "full" = full ] && [ "linux/amd64" != "linux/amd64" ]; then echo "the full tier runs on the host's platform (linux/amd64), not linux/amd64" >&2; exit 1; fi|
 "@WORK@/scripts/image-test.sh" --tier "full" --image "app:prebuilt-linux-amd64" --platform "linux/amd64" --binary "@WORK@/dist/app-linux-amd64" --expect-version "v1.2.3 abc123 2026-01-02T03:04:05Z"|
+test -n "app" || { echo "DOCKER_TARGETS is empty; image gates require an image" >&2; exit 1; }|
 ### status 0
 ### rust.mk docker.mk rust-release.mk image.mk | IMAGE_HOST_PLATFORM=linux/amd64 | image-build-test
 if [ "full" = full ] && [ "linux/amd64" != "linux/amd64" ]; then echo "the full tier runs on the host's platform (linux/amd64), not linux/amd64" >&2; exit 1; fi|
@@ -316,6 +318,7 @@ docker buildx build --load --platform "linux/amd64" --target prebuilt --build-co
 make --no-print-directory image-test-app GIT_VERSION="v1.2.3" GIT_COMMIT="abc123" BUILD_DATE="2026-01-02T03:04:05Z"|
 if [ "full" = full ] && [ "linux/amd64" != "linux/amd64" ]; then echo "the full tier runs on the host's platform (linux/amd64), not linux/amd64" >&2; exit 1; fi|
 "@WORK@/scripts/image-test.sh" --tier "full" --image "app:prebuilt-linux-amd64" --platform "linux/amd64" --binary "@WORK@/dist/app-linux-amd64" --expect-version "v1.2.3 abc123 2026-01-02T03:04:05Z"|
+test -n "app" || { echo "DOCKER_TARGETS is empty; image gates require an image" >&2; exit 1; }|
 ### status 0
 ### web.mk rust.mk | WEB_DIR=web | web-install
 npm --prefix "web" ci|
