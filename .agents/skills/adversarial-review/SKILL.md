@@ -14,41 +14,17 @@ description: >
 You are a hostile reviewer. Assume the change is **wrong until proven right**. Consumers fetch these
 files blind on `make mk-common-update`, and a recipe is shell that runs on their machines. Find the
 consumer setup, variable value or path where it breaks. A review that finds nothing is only credible
-after you tried to break it and failed.
+after you tried to break it and failed. Read `AGENTS.md` first: its invariants are the review
+checklist's floor.
 
-Copy this checklist and tick items as you go:
+## Scope
 
-```text
-Review progress:
-- [ ] 1. Diff and intent established (default scope if none given)
-- [ ] 2. AGENTS.md and the contracts it names read
-- [ ] 3. Repository invariants checked
-- [ ] 4. Adversarial passes run
-- [ ] 5. Findings confirmed or dropped; gates run
-- [ ] 6. Report written
-```
+When invoked directly: review the scope the user gives (`gh pr diff <n>` for a PR); with none, the
+uncommitted work (`git diff HEAD` plus untracked files); on a clean tree, `git diff main...HEAD`.
+Read every changed snippet in full, the stated intent (`git log --oneline` for the range), and
+`Makefile.sample` and the README module table when the public surface changes.
 
-## 1. Establish the diff
-
-With no scope given, review the uncommitted work; if the tree is clean, review the branch against
-`main`.
-
-| User intent | Command |
-| --- | --- |
-| "my work" / uncommitted | `git status`, then `git diff HEAD`; read untracked files too |
-| staged changes only | `git diff --staged` |
-| a branch / "this PR" | `git diff main...HEAD` |
-| a commit range | `git diff <base>..<head>` |
-| a GitHub PR number | `gh pr diff <n>` and `gh pr view <n>` |
-
-Read every changed snippet in full, and `Makefile.sample` and the README module table when the
-public surface changes.
-
-## 2. Load project authority
-
-Read `AGENTS.md` first: its invariants are the review checklist's floor.
-
-## 3. Repository invariants — check on every review
+## Repository invariants
 
 ### Consumers of `v1`
 
@@ -84,21 +60,23 @@ Read `AGENTS.md` first: its invariants are the review checklist's floor.
   download or write straight into `.mk/` reopens the half-updated window
   (`scripts/test-bootstrap.sh` must still pass, and must fail against the old behaviour).
 
-## 4. Adversarial passes
+### Commits and releases
+
+`svu` derives the release from the commit types since the last tag, and every commit lands as it is
+(merge commits). A change to what a fetched file (`.mk/*.mk`, `scripts/bootstrap-mk-common.sh`)
+does, typed `chore`, `docs`, `refactor` or `perf`, never reaches consumers on its own: a finding. So
+is a `feat`/`fix` on a change consumers do not receive (CI, docs, tests), which cuts a release with
+nothing in it, a stray `!` or `BREAKING CHANGE:` footer that cuts a major inside `v1`, and a subject
+with a word ending in `feat` or `fix` right before a colon (`prefix:`), which `svu` counts as `fix`.
+Comment-only changes to fetched files may be `docs` or `chore` (`AGENTS.md`, commit messages).
+
+## Adversarial passes
 
 - **Correctness:** a wrong automatic variable, a `$(shell ...)` evaluated at parse time that should
   run at recipe time.
 - **Empty:** unset optional variables, an empty `GO_BINARIES` / `DOCKER_TARGETS`, a repository with
   no git (`REPO_ROOT` falls back to `pwd`).
 - **Contract drift:** README table, `Makefile.sample` and `AGENTS.md` still describe the snippets.
-- **Commit type matches whether it ships:** `svu` derives the release from the commit types since
-  the last tag, and every commit lands as it is (merge commits). A change to what a fetched file
-  (`.mk/*.mk`, `scripts/bootstrap-mk-common.sh`) does, typed `chore`, `docs`, `refactor` or `perf`,
-  never reaches consumers on its own: a finding. So is a `feat`/`fix` on a change consumers do not
-  receive (CI, docs, tests), which cuts a release with nothing in it, a stray `!` or
-  `BREAKING CHANGE:` footer that cuts a major inside `v1`, and a subject with a word ending in
-  `feat` or `fix` right before a colon (`prefix:`), which `svu` counts as `fix`. Comment-only
-  changes to fetched files may be `docs` or `chore` (`AGENTS.md`, commit messages).
 - **A meta-test that can no longer fail:** `scripts/test-mk.sh`, `scripts/test-bootstrap.sh`,
   `scripts/test-license-headers.sh` and `scripts/check-license-headers.sh` guard claims the
   snippets cannot check for themselves. Break the guarded thing once (drop an include guard, change
@@ -106,21 +84,23 @@ Read `AGENTS.md` first: its invariants are the review checklist's floor.
   the test still fails. A check that passes because its file list is empty, its `case` pattern no
   longer matches anything, or its loop never ran is a false pass: a finding.
 
-For each candidate finding, reproduce it or trace the failing input end to end. If that confirms it,
-report it; if not, dig once more, then drop it. No named input and wrong result, no finding.
+## Gates
 
-## 5. Verify
+Do not re-run the repository's gates (`make test`, `make check`). The implementer is expected to run
+them and CI runs them again, but do not assume either happened: report the verification evidence you
+actually have (under adversarial-review-loop, `verification.txt` when supplied, which is the
+implementer's claim and not proof; when invoked directly, the CI status or gate output in the PR or
+session) and what is missing, such as a changed `.mk` target never shown running
+(`make -n <target>`, then for real) in a consumer, a bootstrap change never shown through `make
+mk-common-update` with `MK_COMMON_VERSION` pointing at the branch, or a meta-test change with no
+mutation showing it still fails (`make test` does not run recipes, so a green run does not show a
+recipe works). Never say that a check you did not see passed. Judge whether the change's tests prove
+it: a behaviour change needs a test that fails on the old code. When invoked directly, one focused
+command (`make -n <target>`) may be run to confirm a single suspected finding, never a full suite or
+gate. A candidate that is neither reproduced nor traced end to end is dropped: no named input and
+wrong result, no finding.
 
-| Diff touched | Run |
-| --- | --- |
-| any `.mk/*.mk` | `make test`, `make check`, then run the changed targets (`make -n <target>`, then for real) in a consumer |
-| `scripts/bootstrap-mk-common.sh` | `make check`, then in a consumer: `make mk-common-update` with `MK_COMMON_VERSION` pointing at the branch |
-| `scripts/test-*.sh`, `scripts/check-license-headers.sh` | `make test`, `make check`, and the mutation from the meta-test pass above |
-| anything else | `make check` |
-
-Say which recipes you could not run rather than implying they passed.
-
-## 6. Report
+## Report
 
 Rank worst first:
 
@@ -130,4 +110,5 @@ Rank worst first:
   Fix: <the specific change>
 ```
 
-End with a verdict: **block**, **approve with nits**, or **approve**, and the gates you ran.
+End with a verdict (**block**, **approve with nits** or **approve**) and one line:
+`Verification evidence: seen … / missing …`.
