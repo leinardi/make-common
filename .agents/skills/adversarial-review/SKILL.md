@@ -90,15 +90,16 @@ Do not re-run the repository's gates (`make test`, `make check`). The implemente
 them and CI runs them again, but do not assume either happened: report the verification evidence you
 actually have (under adversarial-review-loop, `verification.txt` when supplied, which is the
 implementer's claim and not proof; when invoked directly, the CI status or gate output in the PR or
-session) and what is missing, such as a changed `.mk` target never shown running
-(`make -n <target>`, then for real) in a consumer, a bootstrap change never shown through `make
+session) and what is missing, such as a changed `.mk` target never shown running (`make -n
+<target>`, then for real) in a consumer, a bootstrap change never shown through `make
 mk-common-update` with `MK_COMMON_VERSION` pointing at the branch, or a meta-test change with no
 mutation showing it still fails (`make test` does not run recipes, so a green run does not show a
-recipe works). Never say that a check you did not see passed. Judge whether the change's tests prove
-it: a behaviour change needs a test that fails on the old code. When invoked directly, one focused
-command (`make -n <target>`) may be run to confirm a single suspected finding, never a full suite or
-gate. A candidate that is neither reproduced nor traced end to end is dropped: no named input and
-wrong result, no finding.
+recipe works). Judge what is missing against `AGENTS.md`'s *Validation matrix*: every changed path
+owes the checks its row names. Never say that a check you did not see passed. Judge whether the
+change's tests prove it: a behaviour change needs a test that fails on the old code. When invoked
+directly, one focused command (`make -n <target>`) may be run to confirm a single suspected finding,
+never a full suite or gate. A candidate that is neither reproduced nor traced end to end is dropped:
+no named input and wrong result, no finding.
 
 ## Report
 
