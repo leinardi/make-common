@@ -96,6 +96,9 @@ rust.mk|rust-dist BIN_NAME=myapp|cargo build --release --locked --bin "myapp"
 rust.mk|rust-dist BIN_NAME=myapp CARGO_TARGET_DIR=/tmp/t|cp "/tmp/t/release/myapp" "dist/myapp"
 rust.mk|rust-run RUST_RUN_BIN=myapp ARGS=--help|cargo run --locked --bin "myapp" -- --help
 rust.mk|rust-deny|cargo deny --workspace check
+rust.mk|rust-deny-shipped RUST_DENY_SHIPPED=Cargo.toml:deny-shipped.toml|cargo deny --manifest-path "Cargo.toml" --config "deny-shipped.toml" check bans
+rust.mk|rust-deny-shipped RUST_DENY_SHIPPED=crates/a/Cargo.toml:deny-a.toml RUST_DENY_SHIPPED+=crates/b/Cargo.toml:deny-b.toml|cargo deny --manifest-path "crates/a/Cargo.toml" --config "deny-a.toml" check bans
+rust.mk|rust-deny-shipped RUST_DENY_SHIPPED=crates/a/Cargo.toml:deny-a.toml RUST_DENY_SHIPPED+=crates/b/Cargo.toml:deny-b.toml|cargo deny --manifest-path "crates/b/Cargo.toml" --config "deny-b.toml" check bans
 rust.mk|rust-build RUST_STAMP_PREFIX=MYAPP RUST_BUILD_ENV=|cargo build --workspace --all-targets --all-features --locked
 rust.mk|rust-dist BIN_NAME=myapp RUST_DIST_PROFILE=dist-local|cargo build --profile "dist-local" --locked --bin "myapp"
 rust.mk|rust-dist BIN_NAME=myapp RUST_DIST_PROFILE=dist-local|cp "target/dist-local/myapp" "dist/myapp"
@@ -180,6 +183,68 @@ MAKEFILE
 	fi
 	echo "ok   - $name: make $args"
 done <<<"$RECIPES"
+
+# rust-deny-shipped for real, against a fake cargo that answers the metadata read, logs every
+# deny call's arguments to DENY_CALLS and exits with the next status in FAKE_DENY_STATUS (0 when
+# the list runs out): the list's order, the arguments, and the stop at the first failure.
+mkdir -p "$WORK/deny-bin"
+cat >"$WORK/deny-bin/cargo" <<'CARGO'
+#!/usr/bin/env bash
+if [[ "$1" == metadata ]]; then
+	printf '{"packages":[],"target_directory":"target","version":1,"workspace_root":"/w","metadata":null}\n'
+	exit 0
+fi
+[[ "$1" == deny ]] || exit 2
+echo "$*" >>"$DENY_CALLS"
+calls=$(wc -l <"$DENY_CALLS")
+read -r -a statuses <<<"${FAKE_DENY_STATUS:-}"
+exit "${statuses[calls - 1]:-0}"
+CARGO
+chmod +x "$WORK/deny-bin/cargo"
+cat >"$WORK/Makefile" <<MAKEFILE
+REPO_ROOT := $WORK
+include $ROOT/.mk/help.mk
+include $ROOT/.mk/rust.mk
+MAKEFILE
+deny_shipped() {
+	: >"$WORK/deny-calls"
+	PATH="$WORK/deny-bin:$PATH" DENY_CALLS="$WORK/deny-calls" FAKE_DENY_STATUS="$1" \
+		make --no-print-directory -s -C "$WORK" rust-deny-shipped "RUST_DENY_SHIPPED=$2" 2>&1
+}
+two_pairs="crates/a/Cargo.toml:deny-a.toml crates/b/Cargo.toml:deny-b.toml"
+expected_two="deny --manifest-path crates/a/Cargo.toml --config deny-a.toml check bans
+deny --manifest-path crates/b/Cargo.toml --config deny-b.toml check bans"
+if out=$(deny_shipped "" "") || ! grep -q 'RUST_DENY_SHIPPED is empty' <<<"$out" ||
+	[[ -s "$WORK/deny-calls" ]]; then
+	echo "FAIL - rust.mk: an empty RUST_DENY_SHIPPED does not stop before cargo"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust.mk: an empty RUST_DENY_SHIPPED stops, naming it, and runs no cargo"
+fi
+if out=$(deny_shipped "" "Cargo.toml crates/a/Cargo.toml:deny-a.toml") ||
+	! grep -q 'not <manifest>:<config>: Cargo.toml' <<<"$out" || [[ -s "$WORK/deny-calls" ]]; then
+	echo "FAIL - rust.mk: a pair without its config does not stop before cargo"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
+	fail=1
+else
+	echo "ok   - rust.mk: a pair without its config stops, naming it, and runs no cargo"
+fi
+if ! out=$(deny_shipped "0 0" "$two_pairs") || [[ $(<"$WORK/deny-calls") != "$expected_two" ]]; then
+	echo "FAIL - rust.mk: rust-deny-shipped does not check both pairs in order and pass"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out$(cat "$WORK/deny-calls")"
+	fail=1
+else
+	echo "ok   - rust.mk: rust-deny-shipped checks each pair's bans in order and passes"
+fi
+if out=$(deny_shipped "1 0" "$two_pairs") ||
+	[[ $(<"$WORK/deny-calls") != "deny --manifest-path crates/a/Cargo.toml --config deny-a.toml check bans" ]]; then
+	echo "FAIL - rust.mk: a failing first pair does not stop rust-deny-shipped"
+	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out$(cat "$WORK/deny-calls")"
+	fail=1
+else
+	echo "ok   - rust.mk: a failing first pair fails rust-deny-shipped and the second never runs"
+fi
 
 # Run password generation too: a malformed tr range can fail while the recipe's
 # final echo still makes make succeed. Check stderr, length and allowed bytes.
