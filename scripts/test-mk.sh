@@ -137,6 +137,13 @@ web.mk parity.mk|demo-parity-servers WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PR
 web.mk parity.mk|demo-parity-servers WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|  echo "prototype: http://127.0.0.1:5291/index.html"; \
 web.mk parity.mk|demo-parity-servers WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|  echo "demo:      http://127.0.0.1:5290/"; \
 web.mk parity.mk|demo-parity-servers WEB_DIR=web PARITY_DEMO_PORT=5290 PARITY_PROTO_PORT=5291|  PARITY_DEMO_PORT="5290" PARITY_PROTO_PORT="5291" npm run parity:serve:demo; \
+zensical.mk|docs-build DOCS_UV_PROJECT=tools/docs|uv run --project "tools/docs" --locked zensical build -f zensical.toml --strict --clean
+zensical.mk|docs-serve DOCS_UV_PROJECT=tools/docs DOCS_ADDR=127.0.0.1:8001|uv run --project "tools/docs" --locked zensical serve -f zensical.toml -a 127.0.0.1:8001
+zensical.mk|docs-deps-sync DOCS_UV_PROJECT=tools/docs|uv sync --project "tools/docs" --locked
+zensical.mk|docs-deps-upgrade DOCS_UV_PROJECT=tools/docs|uv lock --project "tools/docs" --upgrade
+zensical.mk|docs-deps-lock DOCS_UV_PROJECT=tools/docs|uv lock --project "tools/docs"
+zensical.mk|docs-deps-check-upgrade DOCS_UV_PROJECT=tools/docs|uv lock --project "tools/docs" --upgrade --dry-run
+zensical.mk|docs-audit DOCS_UV_PROJECT=tools/docs|  uv tool run pip-audit==2.10.1 --require-hashes --disable-pip -r $tmp || true; \
 EOF
 )
 mkdir -p "$WORK/web"
