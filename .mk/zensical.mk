@@ -37,6 +37,14 @@ MK_COMMON_ZENSICAL_INCLUDED := 1
 # share (zensical needs pygments>=2.20 while an older tools lock pins 2.19.2 through rich),
 # and pip-sync refuses two pins for the same package. The tools lock is still compiled and
 # installed first, because pip-tools has to be in the venv before the combined lock can be.
+#
+# uv mode: set DOCS_UV_PROJECT to a directory holding a pyproject.toml (no build system) that
+# lists zensical, and its uv.lock, both committed (tools/docs is the suggested place). Then every
+# docs-* target runs through uv instead: nothing goes into the system Python (uv keeps its own
+# interpreters and caches), uv makes the environment in DOCS_UV_PROJECT/.venv (gitignore it)
+# from the lock, hashes included, and
+# Dependabot's uv ecosystem can bump zensical in the lock. The pip-tools variables, the tools lock
+# and venv/ are not used then.
 
 # Paths / files (override these in your repo if needed)
 ZENSICAL_CONFIG ?= zensical.toml
@@ -60,10 +68,32 @@ DOCS_VENV_PY  := $(DOCS_VENV_BIN)/python
 DOCS_PIP_COMPILE       := $(DOCS_VENV_BIN)/pip-compile
 DOCS_PIP_COMPILE_FLAGS := --generate-hashes --strip-extras
 
+# uv mode (see above); empty keeps the pip-tools venv.
+DOCS_UV_PROJECT ?=
+DOCS_UV_BIN     ?= uv
+DOCS_UV_RUN      = $(DOCS_UV_BIN) run --project "$(DOCS_UV_PROJECT)" --locked
+# pip-audit for docs-audit in uv mode, run with uv tool run at this version.
+DOCS_PIP_AUDIT_VERSION ?= 2.10.1
+
+# docs-serve address (IP:PORT); empty uses Zensical's default, localhost:8000.
+DOCS_ADDR ?=
+
+# Set DOCS_UV_PROJECT before including this file (or on the command line): the mode is fixed
+# when make reads it.
+DOCS_UV_MODE := $(strip $(DOCS_UV_PROJECT))
+
 # ---- Python / venv bootstrap -------------------------------------------------
 
+.PHONY: docs-check-uv
+docs-check-uv: # Internal: ensure uv exists (uv mode)
+	@if ! command -v $(DOCS_UV_BIN) >/dev/null 2>&1; then \
+	  echo "Error: uv not found (DOCS_UV_PROJECT is set). Install it: https://docs.astral.sh/uv/"; \
+	  exit 1; \
+	fi
+
 .PHONY: docs-check-python
-docs-check-python: # Internal: ensure Python exists
+docs-check-python: # Internal: ensure Python exists (and that uv mode was not asked for too late)
+	$(if $(strip $(DOCS_UV_PROJECT)),$(error DOCS_UV_PROJECT was set after zensical.mk was included; set it before the include or on the command line))
 	@if ! command -v $(DOCS_PYTHON) >/dev/null 2>&1; then \
 	  echo "Error: Python 3 not found."; \
 	  echo "Install it with:"; \
@@ -80,7 +110,7 @@ $(DOCS_PYTHON_VENV)/.ready: | docs-check-python
 	@touch $@
 
 .PHONY: docs-venv
-docs-venv: $(DOCS_PYTHON_VENV)/.ready ## Ensure Python virtualenv for docs exists
+docs-venv: $(if $(DOCS_UV_MODE),docs-deps-sync,$(DOCS_PYTHON_VENV)/.ready) ## Ensure Python virtualenv for docs exists
 
 # pip-tools is needed to compile the tools lock, which pins pip-tools itself, so the first
 # install is unpinned; docs-dev-sync then replaces it with the pinned version.
@@ -94,9 +124,13 @@ $(DOCS_TOOLS_LOCK): $(DOCS_TOOLS_IN) | docs-venv $(DOCS_PIP_COMPILE)
 	$(DOCS_PIP_COMPILE) $(DOCS_PIP_COMPILE_FLAGS) -o $(DOCS_TOOLS_LOCK) $(DOCS_TOOLS_IN)
 
 .PHONY: docs-dev-lock
-docs-dev-lock: | docs-venv $(DOCS_PIP_COMPILE) ## Re-lock dev tools requirements (tools.in -> tools.txt)
+docs-dev-lock: | $(if $(DOCS_UV_MODE),,docs-venv $(DOCS_PIP_COMPILE)) ## Re-lock dev tools requirements (tools.in -> tools.txt)
+ifneq ($(DOCS_UV_MODE),)
+	@echo "uv mode: no tools lock (docs-audit runs pip-audit with uv tool run)."
+else
 	@echo "Compiling $(DOCS_TOOLS_IN) -> $(DOCS_TOOLS_LOCK) ..."
 	$(DOCS_PIP_COMPILE) $(DOCS_PIP_COMPILE_FLAGS) -o $(DOCS_TOOLS_LOCK) $(DOCS_TOOLS_IN)
+endif
 
 # The tools lock is installed only when it changes, tracked by a stamp in the venv. The
 # combined Zensical lock that docs-deps-sync applies afterwards can pin shared packages
@@ -111,11 +145,15 @@ $(DOCS_TOOLS_STAMP): $(DOCS_TOOLS_LOCK) | docs-venv
 	@touch $@
 
 .PHONY: docs-dev-sync
-docs-dev-sync: $(DOCS_TOOLS_STAMP) ## Install dev tools from tools.txt into the venv (when it changed)
+docs-dev-sync: $(if $(DOCS_UV_MODE),docs-check-uv,$(DOCS_TOOLS_STAMP)) ## Install dev tools from tools.txt into the venv (when it changed)
 
 .PHONY: docs-bootstrap
 docs-bootstrap: docs-dev-sync ## One-shot docs tooling bootstrap
+ifneq ($(DOCS_UV_MODE),)
+	@echo "Docs bootstrap complete (uv mode)."
+else
 	@echo "Docs bootstrap complete."
+endif
 
 # ---- Zensical dependencies ---------------------------------------------------
 
@@ -125,16 +163,27 @@ $(ZENSICAL_LOCK): $(DOCS_TOOLS_IN) $(ZENSICAL_IN) | docs-bootstrap
 
 .PHONY: docs-deps-lock
 docs-deps-lock: docs-bootstrap ## Re-lock Zensical deps (no version upgrades)
+ifneq ($(DOCS_UV_MODE),)
+	$(DOCS_UV_BIN) lock --project "$(DOCS_UV_PROJECT)"
+else
 	@echo "Compiling $(DOCS_TOOLS_IN) + $(ZENSICAL_IN) -> $(ZENSICAL_LOCK) ..."
 	$(DOCS_PIP_COMPILE) $(DOCS_PIP_COMPILE_FLAGS) -o $(ZENSICAL_LOCK) $(DOCS_TOOLS_IN) $(ZENSICAL_IN)
+endif
 
 .PHONY: docs-deps-upgrade
 docs-deps-upgrade: docs-bootstrap ## Upgrade Zensical + dev tools deps to latest and lock
+ifneq ($(DOCS_UV_MODE),)
+	$(DOCS_UV_BIN) lock --project "$(DOCS_UV_PROJECT)" --upgrade
+else
 	@echo "Upgrading and compiling $(DOCS_TOOLS_IN) + $(ZENSICAL_IN) -> $(ZENSICAL_LOCK) ..."
 	$(DOCS_PIP_COMPILE) --upgrade $(DOCS_PIP_COMPILE_FLAGS) -o $(ZENSICAL_LOCK) $(DOCS_TOOLS_IN) $(ZENSICAL_IN)
+endif
 
-.PHONY: docs-deps-check-upgrade
-docs-deps-check-upgrade: docs-bootstrap $(ZENSICAL_LOCK) ## Show diff of would-be Zensical upgrades
+.PHONY: docs-deps-outdated
+docs-deps-outdated: docs-bootstrap $(if $(DOCS_UV_MODE),,$(ZENSICAL_LOCK)) ## Show diff of would-be Zensical upgrades
+ifneq ($(DOCS_UV_MODE),)
+	$(DOCS_UV_BIN) lock --project "$(DOCS_UV_PROJECT)" --upgrade --dry-run
+else
 	@tmp=$$(mktemp); \
 	echo "Checking for available updates (dry-run) ..."; \
 	$(DOCS_PIP_COMPILE) --upgrade $(DOCS_PIP_COMPILE_FLAGS) -o $$tmp $(DOCS_TOOLS_IN) $(ZENSICAL_IN) >/dev/null 2>&1 || true; \
@@ -146,31 +195,63 @@ docs-deps-check-upgrade: docs-bootstrap $(ZENSICAL_LOCK) ## Show diff of would-b
 	  echo "Zensical requirements are up-to-date."; \
 	fi; \
 	rm -f $$tmp
+endif
+
+# The target's name before v1.16.0; kept so existing scripts and habits still work.
+.PHONY: docs-deps-check-upgrade
+docs-deps-check-upgrade: docs-deps-outdated
 
 # ---- Sync + build / serve / audit / clean -----------------------------------
 
 .PHONY: docs-deps-sync
-docs-deps-sync: docs-bootstrap $(ZENSICAL_LOCK) ## Sync venv to the Zensical + dev tools lock
+docs-deps-sync: docs-bootstrap $(if $(DOCS_UV_MODE),,$(ZENSICAL_LOCK)) ## Sync venv to the Zensical + dev tools lock
+ifneq ($(DOCS_UV_MODE),)
+	$(DOCS_UV_BIN) sync --project "$(DOCS_UV_PROJECT)" --locked
+else
 	@echo "Syncing venv to $(ZENSICAL_LOCK) ..."
 	$(DOCS_VENV_BIN)/pip-sync $(ZENSICAL_LOCK)
+endif
 
 .PHONY: docs-build
 docs-build: docs-deps-sync ## Build the docs site (strict)
+ifneq ($(DOCS_UV_MODE),)
+	@echo "Building docs site..."
+	$(DOCS_UV_RUN) zensical build -f $(ZENSICAL_CONFIG) --strict --clean
+else
 	@echo "Building docs site..."
 	$(DOCS_VENV_BIN)/zensical build -f $(ZENSICAL_CONFIG) --strict --clean
+endif
 
 .PHONY: docs-serve
 docs-serve: docs-deps-sync ## Serve the docs site with live reload
-	$(DOCS_VENV_BIN)/zensical serve -f $(ZENSICAL_CONFIG)
+ifneq ($(DOCS_UV_MODE),)
+	$(DOCS_UV_RUN) zensical serve -f $(ZENSICAL_CONFIG)$(if $(DOCS_ADDR), -a $(DOCS_ADDR))
+else
+	$(DOCS_VENV_BIN)/zensical serve -f $(ZENSICAL_CONFIG)$(if $(DOCS_ADDR), -a $(DOCS_ADDR))
+endif
 
 .PHONY: docs-audit
 docs-audit: docs-deps-sync ## Audit docs dependencies for known vulnerabilities
+ifneq ($(DOCS_UV_MODE),)
+	@tmp=$$(mktemp); \
+	status=0; \
+	$(DOCS_UV_BIN) export --project "$(DOCS_UV_PROJECT)" --locked --no-emit-project --format requirements-txt -o $$tmp >/dev/null || status=$$?; \
+	if [ $$status -eq 0 ]; then \
+	  $(DOCS_UV_BIN) tool run pip-audit==$(DOCS_PIP_AUDIT_VERSION) --require-hashes --disable-pip -r $$tmp || true; \
+	fi; \
+	rm -f $$tmp; exit $$status
+else
 	$(DOCS_VENV_BIN)/pip-audit -r $(ZENSICAL_LOCK) || true
+endif
 
 .PHONY: docs-clean
 docs-clean: ## Clean docs build artifacts
 	rm -rf $(DOCS_SITE_DIR) .cache
+ifneq ($(DOCS_UV_MODE),)
+	@echo "To remove the environment as well: rm -rf $(DOCS_UV_PROJECT)/.venv"
+else
 	@echo "To remove the venv as well: rm -rf $(DOCS_PYTHON_VENV)"
+endif
 
 # ---- Convenience OS deps ----------------------------------------------------
 
