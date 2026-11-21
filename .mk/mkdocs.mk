@@ -93,8 +93,8 @@ docs-deps-upgrade: docs-bootstrap $(MKDOCS_IN) ## Upgrade MkDocs deps to latest 
 	@echo "Upgrading and compiling $(MKDOCS_IN) -> $(MKDOCS_LOCK) ..."
 	$(DOCS_VENV_BIN)/pip-compile --upgrade --generate-hashes --strip-extras -o $(MKDOCS_LOCK) $(MKDOCS_IN)
 
-.PHONY: docs-deps-check-upgrade
-docs-deps-check-upgrade: docs-bootstrap $(MKDOCS_IN) ## Show diff of would-be MkDocs upgrades
+.PHONY: docs-deps-outdated
+docs-deps-outdated: docs-bootstrap $(MKDOCS_IN) ## Show diff of would-be MkDocs upgrades
 	@tmp=$$(mktemp); \
 	echo "Checking for available updates (dry-run) ..."; \
 	$(DOCS_VENV_BIN)/pip-compile --upgrade --generate-hashes --strip-extras -o $$tmp $(MKDOCS_IN) >/dev/null 2>&1 || true; \
@@ -106,6 +106,10 @@ docs-deps-check-upgrade: docs-bootstrap $(MKDOCS_IN) ## Show diff of would-be Mk
 	  echo "MkDocs requirements are up-to-date."; \
 	fi; \
 	rm -f $$tmp
+
+# The target's name before v1.16.0; kept so existing scripts and habits still work.
+.PHONY: docs-deps-check-upgrade
+docs-deps-check-upgrade: docs-deps-outdated
 
 # ---- Sync + build / serve / audit / clean -----------------------------------
 
