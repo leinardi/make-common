@@ -179,8 +179,8 @@ else
 	$(DOCS_PIP_COMPILE) --upgrade $(DOCS_PIP_COMPILE_FLAGS) -o $(ZENSICAL_LOCK) $(DOCS_TOOLS_IN) $(ZENSICAL_IN)
 endif
 
-.PHONY: docs-deps-check-upgrade
-docs-deps-check-upgrade: docs-bootstrap $(if $(DOCS_UV_MODE),,$(ZENSICAL_LOCK)) ## Show diff of would-be Zensical upgrades
+.PHONY: docs-deps-outdated
+docs-deps-outdated: docs-bootstrap $(if $(DOCS_UV_MODE),,$(ZENSICAL_LOCK)) ## Show diff of would-be Zensical upgrades
 ifneq ($(DOCS_UV_MODE),)
 	$(DOCS_UV_BIN) lock --project "$(DOCS_UV_PROJECT)" --upgrade --dry-run
 else
@@ -196,6 +196,10 @@ else
 	fi; \
 	rm -f $$tmp
 endif
+
+# The target's name before v1.16.0; kept so existing scripts and habits still work.
+.PHONY: docs-deps-check-upgrade
+docs-deps-check-upgrade: docs-deps-outdated
 
 # ---- Sync + build / serve / audit / clean -----------------------------------
 

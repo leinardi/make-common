@@ -142,6 +142,7 @@ zensical.mk|docs-serve DOCS_UV_PROJECT=tools/docs DOCS_ADDR=127.0.0.1:8001|uv ru
 zensical.mk|docs-deps-sync DOCS_UV_PROJECT=tools/docs|uv sync --project "tools/docs" --locked
 zensical.mk|docs-deps-upgrade DOCS_UV_PROJECT=tools/docs|uv lock --project "tools/docs" --upgrade
 zensical.mk|docs-deps-lock DOCS_UV_PROJECT=tools/docs|uv lock --project "tools/docs"
+zensical.mk|docs-deps-outdated DOCS_UV_PROJECT=tools/docs|uv lock --project "tools/docs" --upgrade --dry-run
 zensical.mk|docs-deps-check-upgrade DOCS_UV_PROJECT=tools/docs|uv lock --project "tools/docs" --upgrade --dry-run
 zensical.mk|docs-audit DOCS_UV_PROJECT=tools/docs|  uv tool run pip-audit==2.10.1 --require-hashes --disable-pip -r $tmp || true; \
 EOF
