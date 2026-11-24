@@ -147,6 +147,8 @@ zensical.mk|docs-deps-check-upgrade DOCS_UV_PROJECT=tools/docs|uv lock --project
 zensical.mk|docs-audit DOCS_UV_PROJECT=tools/docs|  uv tool run pip-audit==2.10.1 --require-hashes --disable-pip -r $tmp || status=$?; \
 zensical.mk|docs-audit -o docs-deps-sync|venv/bin/pip-audit -r zensical-requirements.txt || status=$?; \
 zensical.mk|docs-install-system-deps-macos|brew install python
+mkdocs.mk|docs-audit -o docs-deps-sync|venv/bin/pip-audit -r mkdocs-requirements.txt || status=$?; \
+mkdocs.mk|docs-install-system-deps-macos|brew install python cairo pango pkg-config gdk-pixbuf
 EOF
 )
 mkdir -p "$WORK/web"

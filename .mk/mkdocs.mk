@@ -41,6 +41,11 @@ DOCS_VENV_BIN := $(DOCS_PYTHON_VENV)/bin
 DOCS_VENV_PIP := $(DOCS_VENV_BIN)/pip
 DOCS_VENV_PY  := $(DOCS_VENV_BIN)/python
 
+# docs-audit fails when pip-audit does (a known vulnerability, or pip-audit itself failing).
+# 0 makes it advisory: pip-audit's findings are printed, its failure is reported as a warning,
+# and the target passes.
+DOCS_AUDIT_FAIL ?= 1
+
 # ---- Python / venv bootstrap -------------------------------------------------
 
 .PHONY: docs-check-python
@@ -95,17 +100,18 @@ docs-deps-upgrade: docs-bootstrap $(MKDOCS_IN) ## Upgrade MkDocs deps to latest 
 
 .PHONY: docs-deps-outdated
 docs-deps-outdated: docs-bootstrap $(MKDOCS_IN) ## Show diff of would-be MkDocs upgrades
-	@tmp=$$(mktemp); \
+	@tmp=$$(mktemp); log=$$(mktemp); trap 'rm -f "$$tmp" "$$log"' EXIT; \
 	echo "Checking for available updates (dry-run) ..."; \
-	$(DOCS_VENV_BIN)/pip-compile --upgrade --generate-hashes --strip-extras -o $$tmp $(MKDOCS_IN) >/dev/null 2>&1 || true; \
-	if ! diff -u $(MKDOCS_LOCK) $$tmp >/dev/null 2>&1; then \
-	  echo "Updates available for $(MKDOCS_LOCK):"; \
-	  diff -u $(MKDOCS_LOCK) $$tmp || true; \
-	  echo; echo "Run: make docs-deps-upgrade && make docs-deps-sync"; \
-	else \
-	  echo "MkDocs requirements are up-to-date."; \
+	if ! $(DOCS_VENV_BIN)/pip-compile --upgrade --generate-hashes --strip-extras -o $$tmp $(MKDOCS_IN) >$$log 2>&1; then \
+	  cat $$log >&2; echo "Error: pip-compile failed; no updates were checked." >&2; exit 1; \
 	fi; \
-	rm -f $$tmp
+	status=0; diff -u $(MKDOCS_LOCK) $$tmp >$$log 2>&1 || status=$$?; \
+	case $$status in \
+	  0) echo "MkDocs requirements are up-to-date." ;; \
+	  1) echo "Updates available for $(MKDOCS_LOCK):"; cat $$log; \
+	     echo; echo "Run: make docs-deps-upgrade && make docs-deps-sync" ;; \
+	  *) cat $$log >&2; echo "Error: diff failed (exit $$status); is $(MKDOCS_LOCK) there? make docs-deps-lock writes it." >&2; exit $$status ;; \
+	esac
 
 # The target's name before v1.16.0; kept so existing scripts and habits still work.
 .PHONY: docs-deps-check-upgrade
@@ -129,7 +135,12 @@ docs-serve: docs-deps-sync ## Serve MkDocs site with live reload
 
 .PHONY: docs-audit
 docs-audit: docs-deps-sync ## Audit docs dependencies for known vulnerabilities
-	$(DOCS_VENV_BIN)/pip-audit -r $(MKDOCS_LOCK) || true
+	@status=0; \
+	$(DOCS_VENV_BIN)/pip-audit -r $(MKDOCS_LOCK) || status=$$?; \
+	if [ $$status -ne 0 ] && [ "$(DOCS_AUDIT_FAIL)" = 0 ]; then \
+	  echo "Warning: pip-audit exited $$status; not failing because DOCS_AUDIT_FAIL=0." >&2; status=0; \
+	fi; \
+	exit $$status
 
 .PHONY: docs-clean
 docs-clean: ## Clean MkDocs build artifacts
@@ -147,6 +158,6 @@ docs-install-system-deps-ubuntu: ## Install Ubuntu system packages for MkDocs/do
 .PHONY: docs-install-system-deps-macos
 docs-install-system-deps-macos: ## Install macOS system packages for MkDocs/docs
 	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found: https://brew.sh"; exit 1; }
-	brew install python cairo pango pkg-config gdk-pixbuf || true
+	brew install python cairo pango pkg-config gdk-pixbuf
 
 endif  # MK_COMMON_MKDOCS_INCLUDED
