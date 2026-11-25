@@ -35,3 +35,7 @@ test: ## Smoke-test every snippet; test the bootstrap script and the licence hea
 	@"$(REPO_ROOT)/scripts/test-mk-defaults.sh"
 	@"$(REPO_ROOT)/scripts/test-bootstrap.sh"
 	@"$(REPO_ROOT)/scripts/test-license-headers.sh"
+
+.PHONY: test-rust-pin-bump
+test-rust-pin-bump: ## Run rust.mk's rust-pin-bump for real against local git fixtures (needs cargo, git, python3; offline)
+	@"$(REPO_ROOT)/scripts/test-rust-pin-bump.sh"
