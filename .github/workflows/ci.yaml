@@ -223,6 +223,21 @@ jobs:
       - name: Smoke-test the snippets
         run: make test
 
+  # rust-pin-bump for real: cargo, git and python3 against local git fixtures, offline. The runner
+  # image brings cargo; the script fails rather than skips without it.
+  rust-pin-bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test rust-pin-bump against real cargo
+        run: make test-rust-pin-bump
+
   # The one required check that stands for the rest: GitHub counts a skipped required job as passing,
   # so this job runs always and decides. On a pull request every needed job must succeed; on a push
   # or a dispatch conventional-commits is skipped and the others must succeed.
@@ -232,6 +247,7 @@ jobs:
       - pre-commit-all
       - conventional-commits
       - mk-smoke
+      - rust-pin-bump
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
