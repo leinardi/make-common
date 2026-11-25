@@ -107,6 +107,8 @@ rust.mk|rust-dist RUST_STAMP_PREFIX=MYAPP RUST_BUILD_ENV= GIT_VERSION=v1 GIT_COM
 rust.mk|rust-clean-stale|cargo sweep --time "7"
 rust.mk|rust-clean-stale RUST_SWEEP_DAYS=30|cargo sweep --time "30"
 rust.mk|rust-clean-stale|cargo sweep --installed
+rust.mk|rust-pin-bump REPO_ROOT=/r TAG=v1.2.3 RUST_PIN_URL=https://github.com/o/r|cd "/r" && "python3" -c "import os, textwrap; exec(compile(textwrap.dedent(os.environ['_RUST_PIN_BUMP_SCRIPT']), 'rust-pin-bump', 'exec'))" --tag "v1.2.3" --url "https://github.com/o/r" --cargo "cargo" --marker "rust-pin-current"
+rust.mk|rust-pin-bump REPO_ROOT=/r TAG=v1.2.3 RUST_PIN_URL=https://github.com/o/r RUST_PIN_DOCS=AGENTS.md RUST_PIN_DOCS+=docs/ledger.md RUST_PIN_DOC_MARKER=pin-now RUST_PIN_PYTHON=python3.12|cd "/r" && "python3.12" -c "import os, textwrap; exec(compile(textwrap.dedent(os.environ['_RUST_PIN_BUMP_SCRIPT']), 'rust-pin-bump', 'exec'))" --tag "v1.2.3" --url "https://github.com/o/r" --cargo "cargo" --marker "pin-now" --doc "AGENTS.md" --doc "docs/ledger.md"
 web.mk|web-build WEB_DIR=web WEB_DIST_SYNC_DIR=web/dist|npm --prefix "web" run build -- --outDir ".dist-staging" --emptyOutDir && rsync -r --checksum --delete "web/.dist-staging/" "web/dist/"
 web.mk|build WEB_DIR=web|echo "build: set WEB_BUILD_NEXT to the target that builds the binary embedding the web app" >&2; exit 2
 rust.mk rust-release.mk|rust-release-binaries BIN_NAME=myapp REPO_ROOT=/r RUST_RELEASE_RUSTFLAGS=F RUST_RELEASE_TARGET_DIR=/r/target|RUSTFLAGS="F"  cargo zigbuild --release --locked --target "x86_64-unknown-linux-musl" --bin myapp
