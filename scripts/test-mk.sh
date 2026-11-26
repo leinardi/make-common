@@ -95,6 +95,9 @@ rust.mk|rust-clippy RUST_FEATURES=|cargo clippy --workspace --all-targets  --loc
 rust.mk|rust-dist BIN_NAME=myapp|cargo build --release --locked --bin "myapp"
 rust.mk|rust-dist BIN_NAME=myapp CARGO_TARGET_DIR=/tmp/t|cp "/tmp/t/release/myapp" "dist/myapp"
 rust.mk|rust-run RUST_RUN_BIN=myapp ARGS=--help|cargo run --locked --bin "myapp" -- --help
+rust.mk|rust-run RUST_STAMP_PREFIX=MYAPP RUST_RUN_UNSTAMPED=1 RUST_RUN_BIN=myapp ARGS=--help GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|MYAPP_VERSION="v1" MYAPP_COMMIT="c" MYAPP_DATE="d" cargo run --locked --config "target.'cfg(all())'.runner='env -u MYAPP_VERSION -u MYAPP_COMMIT -u MYAPP_DATE'" --bin "myapp" -- --help
+rust.mk|rust-run RUST_RUN_UNSTAMPED=1 RUST_RUN_BIN=myapp ARGS=--help|cargo run --locked --bin "myapp" -- --help
+rust.mk|rust-run RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|MYAPP_VERSION="v1" MYAPP_COMMIT="c" MYAPP_DATE="d" cargo run --locked --bin "myapp" -- --help
 rust.mk|rust-deny|cargo deny --workspace check
 rust.mk|rust-deny-shipped RUST_DENY_SHIPPED=Cargo.toml:deny-shipped.toml|cargo deny --manifest-path "Cargo.toml" --config "deny-shipped.toml" check bans
 rust.mk|rust-deny-shipped RUST_DENY_SHIPPED=crates/a/Cargo.toml:deny-a.toml RUST_DENY_SHIPPED+=crates/b/Cargo.toml:deny-b.toml|cargo deny --manifest-path "crates/a/Cargo.toml" --config "deny-a.toml" check bans

@@ -48,7 +48,8 @@ GIT_COMMIT_DATE ?= $(shell TZ=UTC git log -1 --format=%cd --date=format-local:%Y
 # RUST_STAMP_PREFIX: the binary reads its version at compile time from <prefix>_VERSION,
 # <prefix>_COMMIT and <prefix>_DATE (option_env! or env!), e.g. RUST_STAMP_PREFIX := MYAPP.
 # Empty: no stamps. Only the builds (rust-build through RUST_BUILD_ENV) and rust-run stamp, so the
-# tests see the binary's defaults.
+# tests see the binary's defaults. rust-run's binary inherits the stamps in its environment too,
+# unless RUST_RUN_UNSTAMPED is set.
 # RUST_VERSION_ENV is the assignment list, for a consumer's own recipes.
 RUST_STAMP_PREFIX ?=
 RUST_VERSION_ENV = $(if $(strip $(RUST_STAMP_PREFIX)), \
@@ -78,6 +79,15 @@ RUST_DENY_SHIPPED ?=
 
 # rust-run's binary, for a package with more than one; empty lets cargo pick the only one.
 RUST_RUN_BIN ?=
+
+# RUST_RUN_UNSTAMPED: non-empty runs rust-run's binary without the stamp variables in its
+# environment (they are still compiled in), for a binary that refuses unknown <prefix>_*
+# variables. rust-run then sets cargo's runner for every target
+# (target.'cfg(all())'.runner = env -u ...): a runner the workspace configures under a cfg() key
+# makes cargo refuse the run (two matching runners), and one under the exact target triple wins
+# over it and gets the stamps. Empty by default: the binary inherits them, as before.
+RUST_RUN_UNSTAMPED ?=
+_RUST_RUN_UNSTAMPED = $(if $(and $(strip $(RUST_RUN_UNSTAMPED)),$(strip $(RUST_STAMP_PREFIX))), --config "target.'cfg(all())'.runner='env -u $(RUST_STAMP_PREFIX)_VERSION -u $(RUST_STAMP_PREFIX)_COMMIT -u $(RUST_STAMP_PREFIX)_DATE'")
 
 # Where cargo writes: its effective target directory (the binaries) and build directory (a build
 # script's OUT_DIR, which is the target directory unless build.build-dir moves it), as cargo
@@ -119,7 +129,7 @@ rust-dist: ## Build the binary BIN_NAME in RUST_DIST_PROFILE (release), with the
 
 .PHONY: rust-run
 rust-run: ## Run the binary with the version stamps (ARGS="...")
-	$(RUST_VERSION_ENV) $(CARGO) run --locked $(if $(strip $(RUST_RUN_BIN)),--bin "$(RUST_RUN_BIN)") -- $(ARGS)
+	$(RUST_VERSION_ENV) $(CARGO) run --locked$(_RUST_RUN_UNSTAMPED) $(if $(strip $(RUST_RUN_BIN)),--bin "$(RUST_RUN_BIN)") -- $(ARGS)
 
 .PHONY: rust-test
 rust-test: ## Run the Rust tests
