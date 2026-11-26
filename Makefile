@@ -39,3 +39,7 @@ test: ## Smoke-test every snippet; test the bootstrap script and the licence hea
 .PHONY: test-rust-pin-bump
 test-rust-pin-bump: ## Run rust.mk's rust-pin-bump for real against local git fixtures (needs cargo, git, python3; offline)
 	@"$(REPO_ROOT)/scripts/test-rust-pin-bump.sh"
+
+.PHONY: test-rust-run
+test-rust-run: ## Run rust.mk's rust-run for real on a scratch crate, stamped and unstamped (needs cargo; offline)
+	@"$(REPO_ROOT)/scripts/test-rust-run.sh"
