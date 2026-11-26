@@ -43,7 +43,8 @@ endif
 # COPYs `<bin>-${TARGETOS}-${TARGETARCH}` from that context.
 #
 # The stamps are rust.mk's GIT_VERSION, GIT_COMMIT and BUILD_DATE, the ones
-# rust-release-binaries compiles in: pass the same values to both.
+# rust-release-binaries compiles in: pass the same values to both. rust.mk's default BUILD_DATE
+# is read once per make run, so every image of one run gets the same default date.
 
 # The binary an image carries: the target's own name by default (IMAGE_BIN_agent-compose := agent
 # for an image that carries another target's binary).
@@ -68,8 +69,10 @@ IMAGE_TEST_FULL_EXTRA ?=
 # image-build-test-<t>, so a foreign full run stops before its QEMU build.
 _IMAGE_TIER_GUARD = @if [ "$(IMAGE_TEST_TIER)" = full ] && [ "$(IMAGE_PLATFORM)" != "$(IMAGE_HOST_PLATFORM)" ]; then echo "the full tier runs on the host's platform ($(IMAGE_HOST_PLATFORM)), not $(IMAGE_PLATFORM)" >&2; exit 1; fi
 
-# The stamps a build and its test share: computed once here and handed to both sub-makes, since
-# rust.mk's BUILD_DATE reads the clock each time it is expanded.
+# The stamps a build and its test share: computed once per image and handed to both sub-makes,
+# which would otherwise each compute their own. A consumer's own recursive BUILD_DATE is expanded
+# once per image, so images of one run may differ; `BUILD_DATE := ...` after the include shares one
+# value across them.
 _IMAGE_STAMPS = GIT_VERSION="$(GIT_VERSION)" GIT_COMMIT="$(GIT_COMMIT)" BUILD_DATE="$(BUILD_DATE)"
 
 define _IMAGE_TEMPLATE

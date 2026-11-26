@@ -37,7 +37,10 @@ DIST_DIR ?= dist
 # Version metadata (generic, derived from git when available), as go.mk has it.
 GIT_COMMIT  ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo "none")
 GIT_VERSION ?= $(shell git describe --tags --dirty --always 2>/dev/null || echo "v0.0.0")
-BUILD_DATE  ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+# The clock's date, read once per make run on first use (a recursive $(shell date) would read it at
+# every expansion, and one run could stamp two dates). go.mk and rust.mk define it alike.
+_MK_CLOCK_DATE = $(or $(_mk_clock_date),$(eval _mk_clock_date := $$(shell date -u +"%Y-%m-%dT%H:%M:%SZ"))$(_mk_clock_date))
+BUILD_DATE  ?= $(_MK_CLOCK_DATE)
 
 # HEAD's commit date in UTC, the date the release workflows stamp; empty outside git. BUILD_DATE
 # stays the clock's by default; a consumer that wants a stamp that only moves with a commit, so a
