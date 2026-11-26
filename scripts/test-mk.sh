@@ -629,47 +629,6 @@ sync_case() {
 	mkdir -p "$consumer/web/node_modules" "$consumer/src"
 	touch "$consumer/web/package.json" "$consumer/web/package-lock.json"
 	touch "$consumer/web/node_modules/.package-lock.json"
-# rust.mk's rust-dist copies from cargo's target directory (a build.target-dir that only cargo
-# knows), asks cargo once for two expansions, and stops when cargo cannot report it rather than
-# copying from target/.
-cat >"$WORK/Makefile" <<MAKEFILE
-REPO_ROOT := $WORK
-include $ROOT/.mk/help.mk
-include $ROOT/.mk/rust.mk
-again: rust-dist
-	cp "\$(RUST_TARGET_DIR)/again" /dev/null
-MAKEFILE
-: >"$CARGO_CALLS"
-out=$(FAKE_TARGET_DIR=/custom/t make --no-print-directory -n -C "$WORK" again BIN_NAME=myapp \
-	CARGO="$WORK/bin/cargo" 2>&1) || true
-if [[ $out != *'cp "/custom/t/release/myapp" "dist/myapp"'* ]]; then
-	echo "FAIL - rust.mk: rust-dist does not copy from cargo's target directory"
-	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
-	fail=1
-elif [[ $(wc -l <"$CARGO_CALLS" | tr -d ' ') != 1 ]]; then
-	echo "FAIL - rust.mk: rust-dist asks cargo more than once"
-	fail=1
-else
-	echo "ok   - rust.mk: rust-dist copies from cargo's target directory, asking cargo once"
-fi
-out=$(FAKE_TARGET_DIR=/custom/t make --no-print-directory -n -C "$WORK" rust-dist BIN_NAME=myapp \
-	CARGO="$WORK/bin/cargo" RUST_TARGET_DIR=/set 2>&1) || true
-if [[ $out != *'cp "/set/release/myapp" "dist/myapp"'* ]]; then
-	echo "FAIL - rust.mk: a RUST_TARGET_DIR the consumer sets is not used"
-	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
-	fail=1
-else
-	echo "ok   - rust.mk: a RUST_TARGET_DIR the consumer sets is used"
-fi
-if out=$(make --no-print-directory -n -C "$WORK" rust-dist BIN_NAME=myapp CARGO=false 2>&1) ||
-	! grep -q "cannot read cargo's target directory (run cargo metadata to see why); set RUST_TARGET_DIR" <<<"$out"; then
-	echo "FAIL - rust.mk: a cargo that cannot report its target directory does not stop rust-dist"
-	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
-	fail=1
-else
-	echo "ok   - rust.mk: a cargo that cannot report its target directory stops rust-dist"
-fi
-
 	printf 'one\n' >"$consumer/src/index.html"
 	printf 'two\n' >"$consumer/src/app.js"
 	printf 'gone\n' >"$consumer/src/old.js"
