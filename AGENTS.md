@@ -15,6 +15,7 @@ make check               # pre-commit on all files (checkmake, shellcheck, actio
 make check-stage         # pre-commit on the staged files only
 make test                # snippet smoke test and pinned recipe dry-runs; the bootstrap and the licence header check, offline
 make test-rust-pin-bump  # rust.mk's rust-pin-bump for real against local git fixtures (cargo, git, python3; offline)
+make test-rust-run       # rust.mk's rust-run for real on a scratch crate, stamped and unstamped (cargo; offline)
 make pre-commit-install  # installs the pre-commit and commit-msg hooks
 scripts/check-license-headers.sh  # the licence header check alone (also a pre-commit hook)
 ```
@@ -31,6 +32,7 @@ itself like a consumer.
 | `Makefile.sample` | the canonical consumer `Makefile` (`MK_COMMON_FILES` / `MK_LOCAL_FILES` split) |
 | `scripts/test-mk.sh`, `scripts/test-bootstrap.sh` | the tests behind `make test`: snippet smoke test and the `RECIPES` dry-runs, bootstrap with a fake `git`/`curl` |
 | `scripts/test-rust-pin-bump.sh` | `make test-rust-pin-bump` and the `rust-pin-bump` CI job: `rust.mk`'s `rust-pin-bump` run for real (real cargo, local `file://` git repositories, a cargo wrapper for the moves a pin-only step never makes) |
+| `scripts/test-rust-run.sh` | `make test-rust-run` and a step of the `rust-pin-bump` CI job: `rust.mk`'s `rust-run` run for real (real cargo, a scratch crate printing its stamp compiled in and at run time), default, `RUST_RUN_UNSTAMPED=1` and beside a runner the workspace configures |
 | `scripts/test-mk-defaults.sh`, `scripts/testdata/mk-defaults.golden` | the whole `make -n` output of `rust.mk`, `rust-release.mk`, `image.mk` and `web.mk` with no opt-in set, compared byte for byte; `--update` rewrites it, only for an intended change of a default (a `v2`) |
 | `scripts/check-license-headers.sh`, `scripts/test-license-headers.sh` | the MIT header check (a pre-commit hook) and its offline test |
 | `.github/workflows/ci.yaml` | `pre-commit-all`, `mk-smoke` and `rust-pin-bump` gate, the reviewdog jobs annotate pull requests, `ci-result` is the one required check |
@@ -58,7 +60,7 @@ Run before considering an edit done. `make check` applies to every row.
 
 | You edited | Run |
 | --- | --- |
-| `.mk/*.mk` | `make test`; then the changed target in a consumer, `make -n <target>` and for real. A new or changed recipe gets a `RECIPES` line in `scripts/test-mk.sh`. `rust.mk`'s `rust-pin-bump` (its embedded script included): `make test-rust-pin-bump` too |
+| `.mk/*.mk` | `make test`; then the changed target in a consumer, `make -n <target>` and for real. A new or changed recipe gets a `RECIPES` line in `scripts/test-mk.sh`. `rust.mk`'s `rust-pin-bump` (its embedded script included): `make test-rust-pin-bump` too. `rust.mk`'s `rust-run` or the stamps: `make test-rust-run` too |
 | `scripts/bootstrap-mk-common.sh` | `make test`; then in a consumer, `make mk-common-update` with `MK_COMMON_VERSION` set to the branch |
 | `scripts/test-*.sh`, `scripts/check-license-headers.sh` | `make test`; break what the test guards once and see it fail |
 | `Makefile`, `Makefile.sample` | `make help`, `make test` |

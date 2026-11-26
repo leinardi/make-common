@@ -95,6 +95,9 @@ rust.mk|rust-clippy RUST_FEATURES=|cargo clippy --workspace --all-targets  --loc
 rust.mk|rust-dist BIN_NAME=myapp|cargo build --release --locked --bin "myapp"
 rust.mk|rust-dist BIN_NAME=myapp CARGO_TARGET_DIR=/tmp/t|cp "/tmp/t/release/myapp" "dist/myapp"
 rust.mk|rust-run RUST_RUN_BIN=myapp ARGS=--help|cargo run --locked --bin "myapp" -- --help
+rust.mk|rust-run RUST_STAMP_PREFIX=MYAPP RUST_RUN_UNSTAMPED=1 RUST_RUN_BIN=myapp ARGS=--help GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|MYAPP_VERSION="v1" MYAPP_COMMIT="c" MYAPP_DATE="d" cargo run --locked --config "target.'cfg(all())'.runner='env -u MYAPP_VERSION -u MYAPP_COMMIT -u MYAPP_DATE'" --bin "myapp" -- --help
+rust.mk|rust-run RUST_RUN_UNSTAMPED=1 RUST_RUN_BIN=myapp ARGS=--help|cargo run --locked --bin "myapp" -- --help
+rust.mk|rust-run RUST_STAMP_PREFIX=MYAPP RUST_RUN_BIN=myapp ARGS=--help GIT_VERSION=v1 GIT_COMMIT=c BUILD_DATE=d|MYAPP_VERSION="v1" MYAPP_COMMIT="c" MYAPP_DATE="d" cargo run --locked --bin "myapp" -- --help
 rust.mk|rust-deny|cargo deny --workspace check
 rust.mk|rust-deny-shipped RUST_DENY_SHIPPED=Cargo.toml:deny-shipped.toml|cargo deny --manifest-path "Cargo.toml" --config "deny-shipped.toml" check bans
 rust.mk|rust-deny-shipped RUST_DENY_SHIPPED=crates/a/Cargo.toml:deny-a.toml RUST_DENY_SHIPPED+=crates/b/Cargo.toml:deny-b.toml|cargo deny --manifest-path "crates/a/Cargo.toml" --config "deny-a.toml" check bans
@@ -259,6 +262,84 @@ if out=$(deny_shipped "1 0" "$two_pairs") ||
 else
 	echo "ok   - rust.mk: a failing first pair fails rust-deny-shipped and the second never runs"
 fi
+
+# The default BUILD_DATE is read once per make run: a fake date that answers a new value on each
+# call, and every date a dry run stamps must be one value. go.mk and rust.mk alone and together, in
+# either order, and image.mk's images of one run. A consumer's own date, a target-specific one
+# per image included, and the command line's and the environment's still win.
+mkdir -p "$WORK/date-bin"
+cat >"$WORK/date-bin/date" <<'DATE'
+#!/usr/bin/env bash
+n=$(($(cat "$DATE_COUNT" 2>/dev/null || echo 0) + 1))
+echo "$n" >"$DATE_COUNT"
+echo "date-$n"
+DATE
+chmod +x "$WORK/date-bin/date"
+# date_makefile <lines before the includes> <snippets> <lines after them>
+date_makefile() {
+	local includes
+	includes=$(for n in $2; do printf 'include %s/.mk/%s\n' "$ROOT" "$n"; done)
+	printf 'REPO_ROOT := %s\n%s\ninclude %s/.mk/help.mk\n%s\n%s\n' "$WORK" "$1" "$ROOT" "$includes" "$3" \
+		>"$WORK/Makefile"
+}
+# date_run [make arguments...]: the dry run's output, with the fake date first in PATH.
+date_run() {
+	: >"$WORK/date-count"
+	PATH="$WORK/date-bin:$WORK/bin:$PATH" DATE_COUNT="$WORK/date-count" FAKE_TARGET_DIR=target \
+		CARGO_CALLS=/dev/null make --no-print-directory -n -C "$WORK" "$@" 2>&1
+}
+# date_check <description> <want: clock for one value of the fake date, else the exact date>
+# <output>: every date the output stamps (-X main.date=, <prefix>_DATE= and BUILD_DATE=) is that
+# one value.
+date_check() {
+	local description=$1 want=$2 output=$3 got ok=0
+	got=$(grep -oE '(main\.date=|_DATE=")[^" ]*' <<<"$output" | sed -E 's/^(main\.date=|_DATE=")//' | sort -u)
+	if [[ $want == clock ]]; then
+		[[ $got =~ ^date-[0-9]+$ ]] && ok=1
+	else
+		[[ $got == "$want" ]] && ok=1
+	fi
+	if ((ok)); then
+		echo "ok   - $description"
+	else
+		echo "FAIL - $description: want $want, got: $(tr '\n' ' ' <<<"$got")"
+		while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$output"
+		fail=1
+	fi
+}
+date_makefile "" go.mk ""
+date_check "go.mk: two binaries of one run stamp one default date" clock \
+	"$(date_run go-build GO_BINARIES="a b")"
+date_makefile "" rust.mk ""
+date_check "rust.mk: rust-build and rust-dist of one run stamp one default date" clock \
+	"$(date_run rust-build rust-dist RUST_STAMP_PREFIX=P)"
+date_makefile "" "go.mk rust.mk" ""
+date_check "go.mk then rust.mk: go-build and rust-dist stamp one default date" clock \
+	"$(date_run go-build rust-dist RUST_STAMP_PREFIX=P)"
+date_makefile "" "rust.mk go.mk" ""
+date_check "rust.mk then go.mk: go-build and rust-dist stamp one default date" clock \
+	"$(date_run go-build rust-dist RUST_STAMP_PREFIX=P)"
+image_snippets="rust.mk docker.mk rust-release.mk image.mk"
+image_args=(image-build-test "DOCKER_TARGETS=a b" IMAGE_HOST_PLATFORM=linux/amd64 IMAGE_PLATFORM=linux/amd64)
+date_makefile "" "$image_snippets" ""
+date_check "image.mk: every image of one run gets one default date" clock "$(date_run "${image_args[@]}")"
+date_makefile "" "$image_snippets" "image-build-test-a: BUILD_DATE := stamp-a
+image-build-test-b: BUILD_DATE := stamp-b"
+out=$(date_run "${image_args[@]}")
+date_check "image.mk: a target-specific BUILD_DATE reaches image a's build and test" stamp-a \
+	"$(grep -E 'image-(build-prebuilt|test)-a ' <<<"$out")"
+date_check "image.mk: a target-specific BUILD_DATE reaches image b's build and test" stamp-b \
+	"$(grep -E 'image-(build-prebuilt|test)-b ' <<<"$out")"
+for mk in go.mk rust.mk; do
+	if [[ $mk == go.mk ]]; then goal=(go-build); else goal=(rust-build RUST_STAMP_PREFIX=P); fi
+	# shellcheck disable=SC2016 # a make expression, for make to expand
+	date_makefile 'BUILD_DATE ?= $(PROJECT_DATE)' "$mk" "PROJECT_DATE := 2000-01-01T00:00:00Z"
+	date_check "$mk: a consumer's recursive BUILD_DATE is expanded when used" 2000-01-01T00:00:00Z \
+		"$(date_run "${goal[@]}")"
+	date_makefile "" "$mk" ""
+	date_check "$mk: BUILD_DATE on the command line wins" x "$(date_run "${goal[@]}" BUILD_DATE=x)"
+	date_check "$mk: BUILD_DATE in the environment wins" x "$(BUILD_DATE=x date_run "${goal[@]}")"
+done
 
 # Run password generation too: a malformed tr range can fail while the recipe's
 # final echo still makes make succeed. Check stderr, length and allowed bytes.
@@ -548,47 +629,6 @@ sync_case() {
 	mkdir -p "$consumer/web/node_modules" "$consumer/src"
 	touch "$consumer/web/package.json" "$consumer/web/package-lock.json"
 	touch "$consumer/web/node_modules/.package-lock.json"
-# rust.mk's rust-dist copies from cargo's target directory (a build.target-dir that only cargo
-# knows), asks cargo once for two expansions, and stops when cargo cannot report it rather than
-# copying from target/.
-cat >"$WORK/Makefile" <<MAKEFILE
-REPO_ROOT := $WORK
-include $ROOT/.mk/help.mk
-include $ROOT/.mk/rust.mk
-again: rust-dist
-	cp "\$(RUST_TARGET_DIR)/again" /dev/null
-MAKEFILE
-: >"$CARGO_CALLS"
-out=$(FAKE_TARGET_DIR=/custom/t make --no-print-directory -n -C "$WORK" again BIN_NAME=myapp \
-	CARGO="$WORK/bin/cargo" 2>&1) || true
-if [[ $out != *'cp "/custom/t/release/myapp" "dist/myapp"'* ]]; then
-	echo "FAIL - rust.mk: rust-dist does not copy from cargo's target directory"
-	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
-	fail=1
-elif [[ $(wc -l <"$CARGO_CALLS" | tr -d ' ') != 1 ]]; then
-	echo "FAIL - rust.mk: rust-dist asks cargo more than once"
-	fail=1
-else
-	echo "ok   - rust.mk: rust-dist copies from cargo's target directory, asking cargo once"
-fi
-out=$(FAKE_TARGET_DIR=/custom/t make --no-print-directory -n -C "$WORK" rust-dist BIN_NAME=myapp \
-	CARGO="$WORK/bin/cargo" RUST_TARGET_DIR=/set 2>&1) || true
-if [[ $out != *'cp "/set/release/myapp" "dist/myapp"'* ]]; then
-	echo "FAIL - rust.mk: a RUST_TARGET_DIR the consumer sets is not used"
-	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
-	fail=1
-else
-	echo "ok   - rust.mk: a RUST_TARGET_DIR the consumer sets is used"
-fi
-if out=$(make --no-print-directory -n -C "$WORK" rust-dist BIN_NAME=myapp CARGO=false 2>&1) ||
-	! grep -q "cannot read cargo's target directory (run cargo metadata to see why); set RUST_TARGET_DIR" <<<"$out"; then
-	echo "FAIL - rust.mk: a cargo that cannot report its target directory does not stop rust-dist"
-	while IFS= read -r line; do printf '       %s\n' "$line"; done <<<"$out"
-	fail=1
-else
-	echo "ok   - rust.mk: a cargo that cannot report its target directory stops rust-dist"
-fi
-
 	printf 'one\n' >"$consumer/src/index.html"
 	printf 'two\n' >"$consumer/src/app.js"
 	printf 'gone\n' >"$consumer/src/old.js"
